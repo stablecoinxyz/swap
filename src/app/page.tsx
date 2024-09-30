@@ -102,7 +102,7 @@ export default function Home() {
                 className="text-sm text-zinc-400 hover:text-zinc-200 mr-2"
                 onClick={() => {
                   const input = document.getElementById(
-                    "sbcInput"
+                    "sbcInput",
                   ) as HTMLInputElement;
                   if (input) {
                     input.value = sbcBalance
@@ -113,7 +113,7 @@ export default function Home() {
                       new Event("input", {
                         bubbles: true,
                         cancelable: true,
-                      })
+                      }),
                     );
                   }
                 }}
@@ -124,7 +124,7 @@ export default function Home() {
                 className="text-sm text-zinc-400 hover:text-zinc-200 mr-8"
                 onClick={() => {
                   const input = document.getElementById(
-                    "sbcInput"
+                    "sbcInput",
                   ) as HTMLInputElement;
                   if (input) {
                     input.value = sbcBalance
@@ -135,7 +135,7 @@ export default function Home() {
                       new Event("input", {
                         bubbles: true,
                         cancelable: true,
-                      })
+                      }),
                     );
                   }
                 }}
@@ -159,7 +159,7 @@ export default function Home() {
             input.value = input.value.replace(/[^0-9.]/g, "");
             // update usdc input with converted value based on current conversionRate
             const usdcInput = document.getElementById(
-              "usdcInput"
+              "usdcInput",
             ) as HTMLInputElement;
             if (isSwitched && usdcInput) {
               usdcInput.value = input.value
@@ -183,7 +183,7 @@ export default function Home() {
                 className="text-sm text-zinc-400 hover:text-zinc-200 mr-2"
                 onClick={() => {
                   const input = document.getElementById(
-                    "usdcInput"
+                    "usdcInput",
                   ) as HTMLInputElement;
                   if (input) {
                     input.value = usdcBalance
@@ -194,7 +194,7 @@ export default function Home() {
                       new Event("input", {
                         bubbles: true,
                         cancelable: true,
-                      })
+                      }),
                     );
                   }
                 }}
@@ -205,7 +205,7 @@ export default function Home() {
                 className="text-sm text-zinc-400 hover:text-zinc-200 mr-8"
                 onClick={() => {
                   const input = document.getElementById(
-                    "usdcInput"
+                    "usdcInput",
                   ) as HTMLInputElement;
                   if (input) {
                     input.value = usdcBalance
@@ -216,7 +216,7 @@ export default function Home() {
                       new Event("input", {
                         bubbles: true,
                         cancelable: true,
-                      })
+                      }),
                     );
                   }
                 }}
@@ -242,7 +242,7 @@ export default function Home() {
 
             // update sbc input with converted value based on current conversionRate
             const sbcInput = document.getElementById(
-              "sbcInput"
+              "sbcInput",
             ) as HTMLInputElement;
             console.log(`sbcInput: ${sbcInput}; isSwitched: ${isSwitched}`);
             if (!isSwitched && sbcInput) {
@@ -256,12 +256,27 @@ export default function Home() {
     );
   }
 
+  function doSwap() {
+    const usdcInput = document.getElementById("usdcInput") as HTMLInputElement;
+    const sbcInput = document.getElementById("sbcInput") as HTMLInputElement;
+    const usdcAmount = usdcInput ? usdcInput.value : "";
+    const sbcAmount = sbcInput ? sbcInput.value : "";
+
+    if (isSwitched) {
+      console.log(`Swapping ${sbcAmount} SBC for ${usdcAmount} USDC`);
+    } else {
+      console.log(`Swapping ${usdcAmount} USDC for ${sbcAmount} SBC`);
+    }
+
+    // Add your swap logic here
+  }
+
   return (
-    <main className="p-4 pb-10 min-h-[100vh] flex items-center justify-center container max-w-screen-lg mx-auto">
-      <div className="py-20">
+    <main className="px-4 pb-10 min-h-[100vh] flex items-center justify-center container max-w-screen-lg mx-auto">
+      <div className="py-14">
         <Header />
 
-        <div className="flex justify-center mb-20">
+        <div className="flex justify-center mb-14">
           <div className="flex flex-row">
             <ConnectButton
               client={client}
@@ -296,7 +311,15 @@ export default function Home() {
             <SbcContainer />
           </>
         )}
-        {/* <ThirdwebResources /> */}
+
+        <div className="flex justify-center mt-8">
+          <button
+            onClick={() => doSwap()}
+            className="px-4 py-2 bg-blue-600 text-white rounded"
+          >
+            Swap
+          </button>
+        </div>
       </div>
     </main>
   );
@@ -305,16 +328,7 @@ export default function Home() {
 function Header() {
   return (
     <header className="flex flex-col items-center mb-20 md:mb-20">
-      {/* <Image
-        src={thirdwebIcon}
-        alt=""
-        className="size-[150px] md:size-[150px]"
-        style={{
-          filter: "drop-shadow(0px 0px 24px #a726a9a8)",
-        }}
-      /> */}
-
-      <h1 className="text-2xl md:text-6xl font-semibold md:font-bold tracking-tighter mb-6 text-zinc-100">
+      <h1 className="text-2xl font-semibold tracking-tighter text-zinc-100">
         Stable Coin | Gasless Swap
       </h1>
 

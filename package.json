@@ -6,9 +6,13 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "format": "prettier --write \"**/*.{(j|t)s,(j|t)sx,json,md}\""
   },
   "dependencies": {
+    "@uniswap/sdk-core": "^5.4.0",
+    "@uniswap/v3-periphery": "^1.4.4",
+    "@uniswap/v3-sdk": "^3.14.0",
     "next": "14.1.0",
     "react": "^18.3",
     "react-dom": "^18.3",
@@ -22,6 +26,7 @@
     "eslint": "^8",
     "eslint-config-next": "14.1.0",
     "postcss": "^8",
+    "prettier": "^3.3.3",
     "tailwindcss": "^3.3.0",
     "typescript": "^5"
   }

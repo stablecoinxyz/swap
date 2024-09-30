@@ -7,8 +7,7 @@ const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "Stable Coin | Gasless Swap",
-  description:
-    "",
+  description: "",
 };
 
 export default function RootLayout({
