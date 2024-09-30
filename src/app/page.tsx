@@ -1,28 +1,50 @@
 "use client";
 
-// import Image from "next/image";
-// import thirdwebIcon from "@public/thirdweb.svg";
 import React, { useState } from "react";
+import { getContract } from "thirdweb";
 import {
   ConnectButton,
   useActiveWallet,
   useWalletBalance,
 } from "thirdweb/react";
-import { sepolia } from "thirdweb/chains";
-import { createWalletConnectClient } from "thirdweb/wallets";
+import { polygon } from "thirdweb/chains";
 import { client } from "./client";
 import DisconnectIcon from "@/components/DisconnectIcon";
 import SwitchIcon from "@/components/SwitchIcon";
+import { getUniswapV3Pool } from "thirdweb/extensions/uniswap";
 
-const usdcSepolia = "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238";
-const sbcSepolia = "0xA21658B5702C838FAd4AA840a07023ccDeAa1A85";
+const usdcPolygon = "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359";
+const sbcPolygon = "0xfdcC3dd6671eaB0709A4C0f3F53De9a333d80798";
+
+// const factoryContract = getContract({
+//   client,
+//   address: "0x1F98431c8aD98523631AE4a59f267346ea31F984",
+//   chain: polygon,
+// });
+
+// const pools = await getUniswapV3Pool({
+//   tokenA: usdcPolygon,
+//   tokenB: sbcPolygon,
+//   contract: factoryContract,
+// });
+// console.log(`pools: ${pools}`);
 
 export default function Home() {
+  const conversionRate = 0.99;
   const wallet = useActiveWallet();
   const [isSwitched, setIsSwitched] = useState(false);
 
   const handleSwitch = () => {
     setIsSwitched(!isSwitched);
+    // set both input boxes to empty
+    const usdcInput = document.getElementById("usdcInput") as HTMLInputElement;
+    const sbcInput = document.getElementById("sbcInput") as HTMLInputElement;
+    if (usdcInput) {
+      usdcInput.value = "";
+    }
+    if (sbcInput) {
+      sbcInput.value = "";
+    }
   };
 
   wallet?.subscribe("accountChanged", (account) => {
@@ -39,9 +61,9 @@ export default function Home() {
     isError: usdcIsError,
   } = useWalletBalance({
     address: wallet?.getAccount()?.address,
-    chain: sepolia,
+    chain: polygon,
     client,
-    tokenAddress: usdcSepolia,
+    tokenAddress: usdcPolygon,
   });
 
   const {
@@ -50,9 +72,9 @@ export default function Home() {
     isError: sbcIsError,
   } = useWalletBalance({
     address: wallet?.getAccount()?.address,
-    chain: sepolia,
+    chain: polygon,
     client,
-    tokenAddress: sbcSepolia,
+    tokenAddress: sbcPolygon,
   });
 
   function Switcher() {
@@ -74,12 +96,77 @@ export default function Home() {
       <div className="flex flex-col border border-zinc-800 p-4 rounded-lg w-full relative">
         <h2 className="text-lg font-semibold mb-2">SBC</h2>
         <p className="text-sm text-zinc-400 absolute top-4 right-4">
-          Balance: {sbcIsLoading ? "Loading..." : sbcBalance?.displayValue}
+          {isSwitched && (
+            <>
+              <button
+                className="text-sm text-zinc-400 hover:text-zinc-200 mr-2"
+                onClick={() => {
+                  const input = document.getElementById(
+                    "sbcInput"
+                  ) as HTMLInputElement;
+                  if (input) {
+                    input.value = sbcBalance
+                      ? (Number(sbcBalance.displayValue) / 2).toString()
+                      : "0";
+                    // trigger onInput event to update usdc input
+                    input.dispatchEvent(
+                      new Event("input", {
+                        bubbles: true,
+                        cancelable: true,
+                      })
+                    );
+                  }
+                }}
+              >
+                [50%]
+              </button>
+              <button
+                className="text-sm text-zinc-400 hover:text-zinc-200 mr-8"
+                onClick={() => {
+                  const input = document.getElementById(
+                    "sbcInput"
+                  ) as HTMLInputElement;
+                  if (input) {
+                    input.value = sbcBalance
+                      ? sbcBalance.displayValue.toString()
+                      : "0";
+                    // trigger onInput event to update usdc input
+                    input.dispatchEvent(
+                      new Event("input", {
+                        bubbles: true,
+                        cancelable: true,
+                      })
+                    );
+                  }
+                }}
+              >
+                [max]
+              </button>
+            </>
+          )}
+
+          <span className="font-bold">
+            Balance: {sbcIsLoading ? "Loading..." : sbcBalance?.displayValue}
+          </span>
         </p>
         <input
+          id="sbcInput"
           type="text"
-          className="mt-auto p-2 text-lg border border-zinc-600 rounded w-full"
+          className="mt-auto p-2 text-lg border border-zinc-600 font-extrabold text-zinc-600 rounded w-full"
           placeholder="Enter amount"
+          onInput={(e) => {
+            const input = e.target as HTMLInputElement;
+            input.value = input.value.replace(/[^0-9.]/g, "");
+            // update usdc input with converted value based on current conversionRate
+            const usdcInput = document.getElementById(
+              "usdcInput"
+            ) as HTMLInputElement;
+            if (isSwitched && usdcInput) {
+              usdcInput.value = input.value
+                ? (Number(input.value) / (1 / conversionRate)).toString()
+                : "";
+            }
+          }}
         />
       </div>
     );
@@ -90,12 +177,80 @@ export default function Home() {
       <div className="flex flex-col border border-zinc-800 p-4 rounded-lg w-full relative">
         <h2 className="text-lg font-semibold mb-2">USDC</h2>
         <p className="text-sm text-zinc-400 absolute top-4 right-4">
-          Balance: {usdcIsLoading ? "Loading..." : usdcBalance?.displayValue}
+          {!isSwitched && (
+            <>
+              <button
+                className="text-sm text-zinc-400 hover:text-zinc-200 mr-2"
+                onClick={() => {
+                  const input = document.getElementById(
+                    "usdcInput"
+                  ) as HTMLInputElement;
+                  if (input) {
+                    input.value = usdcBalance
+                      ? (Number(usdcBalance.displayValue) / 2).toString()
+                      : "0";
+                    // trigger onInput event to update sbc input
+                    input.dispatchEvent(
+                      new Event("input", {
+                        bubbles: true,
+                        cancelable: true,
+                      })
+                    );
+                  }
+                }}
+              >
+                [50%]
+              </button>
+              <button
+                className="text-sm text-zinc-400 hover:text-zinc-200 mr-8"
+                onClick={() => {
+                  const input = document.getElementById(
+                    "usdcInput"
+                  ) as HTMLInputElement;
+                  if (input) {
+                    input.value = usdcBalance
+                      ? usdcBalance.displayValue.toString()
+                      : "0";
+                    // trigger onInput event to update sbc input
+                    input.dispatchEvent(
+                      new Event("input", {
+                        bubbles: true,
+                        cancelable: true,
+                      })
+                    );
+                  }
+                }}
+              >
+                [max]
+              </button>
+            </>
+          )}
+
+          <span className="font-bold">
+            Balance: {usdcIsLoading ? "Loading..." : usdcBalance?.displayValue}
+          </span>
         </p>
         <input
+          id="usdcInput"
           type="text"
-          className="mt-auto p-2 text-lg border border-zinc-600 rounded w-full"
+          className="mt-auto p-2 text-lg border border-zinc-600 font-extrabold text-zinc-600 rounded w-full"
           placeholder="Enter amount"
+          onInput={(e) => {
+            const input = e.target as HTMLInputElement;
+            input.value = input.value.replace(/[^0-9.]/g, "");
+            console.log(`input.value: ${input.value}`);
+
+            // update sbc input with converted value based on current conversionRate
+            const sbcInput = document.getElementById(
+              "sbcInput"
+            ) as HTMLInputElement;
+            console.log(`sbcInput: ${sbcInput}; isSwitched: ${isSwitched}`);
+            if (!isSwitched && sbcInput) {
+              sbcInput.value = input.value
+                ? (Number(input.value) * conversionRate).toString()
+                : "";
+            }
+          }}
         />
       </div>
     );
