@@ -1,3 +1,5 @@
+import React from "react";
+
 const DisconnectIcon: React.FC = () => {
   return (
     <svg

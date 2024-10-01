@@ -1,41 +1,110 @@
 "use client";
 
-import React, { useState } from "react";
-import { getContract } from "thirdweb";
+import React, { useCallback, useEffect, useState } from "react";
+import { BigNumber, ethers, providers } from "ethers";
+import { getContract, Hex, sendTransaction } from "thirdweb";
 import {
   ConnectButton,
+  useActiveAccount,
   useActiveWallet,
   useWalletBalance,
 } from "thirdweb/react";
 import { polygon } from "thirdweb/chains";
+import { ethers5Adapter } from "thirdweb/adapters/ethers5";
+import {
+  createPool,
+  exactInput,
+  getPool,
+  getUniswapV3Pool,
+  quoteExactInput,
+} from "thirdweb/extensions/uniswap";
+import {
+  encodeRouteToPath,
+  FACTORY_ADDRESS,
+  Pool,
+  Route,
+} from "@uniswap/v3-sdk";
+import { Currency, Price, Token } from "@uniswap/sdk-core";
+import IUniswapV3PoolABI from "@uniswap/v3-core/artifacts/contracts/interfaces/IUniswapV3Pool.sol/IUniswapV3Pool.json";
+
 import { client } from "./client";
+import { Header } from "@/components/Header";
 import DisconnectIcon from "@/components/DisconnectIcon";
 import SwitchIcon from "@/components/SwitchIcon";
-import { getUniswapV3Pool } from "thirdweb/extensions/uniswap";
+
+enum FeeAmount {
+  LOWEST = 100,
+  LOW = 500,
+  MEDIUM = 3000,
+  HIGH = 10000,
+}
+
+const polygonProvider = new ethers.providers.JsonRpcProvider(
+  "https://polygon-rpc.com",
+);
 
 const usdcPolygon = "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359";
 const sbcPolygon = "0xfdcC3dd6671eaB0709A4C0f3F53De9a333d80798";
 
-// const factoryContract = getContract({
-//   client,
-//   address: "0x1F98431c8aD98523631AE4a59f267346ea31F984",
-//   chain: polygon,
-// });
+const USDC = new Token(1, usdcPolygon, 6, "USDC", "USD Coin");
+const SBC = new Token(1, sbcPolygon, 18, "SBC", "Stable Coin");
 
-// const pools = await getUniswapV3Pool({
-//   tokenA: usdcPolygon,
-//   tokenB: sbcPolygon,
-//   contract: factoryContract,
-// });
-// console.log(`pools: ${pools}`);
+const USDC_SBC_UNISWAP_POOL_ADDRESS =
+  "0x98A5a5D8D448A90C5378A07e30Da5148679b4C45";
+
+const poolContract = new ethers.Contract(
+  USDC_SBC_UNISWAP_POOL_ADDRESS,
+  IUniswapV3PoolABI.abi,
+  polygonProvider,
+);
+
+// https://docs.uniswap.org/contracts/v3/reference/deployments/polygon-deployments
+const uniswapRouterPolygon = getContract({
+  client,
+  address: "0xE592427A0AEce92De3Edee1F18E0157C05861564",
+  chain: polygon,
+});
+
+// async function connectBrowserExtensionWallet() {
+//   if (!(window as any).ethereum) {
+//     return null;
+//   }
+
+//   const { ethereum } = window as any;
+//   const provider = new ethers.providers.Web3Provider(ethereum);
+//   const accounts = await provider.send("eth_requestAccounts", []);
+
+//   if (accounts.length !== 1) {
+//     return;
+//   }
+
+//   const walletExtensionAddress = accounts[0];
+//   return walletExtensionAddress;
+// }
+
+// function createBrowserExtensionProvider(): ethers.providers.Web3Provider | null {
+//   try {
+//     const provider = new ethers.providers.Web3Provider(
+//       (window as any)?.ethereum,
+//       "any",
+//     );
+//     console.log(`Wallet Extension Found: ${provider}`);
+//     return provider;
+//   } catch (e) {
+//     console.log("No Wallet Extension Found");
+//     return null;
+//   }
+// }
 
 export default function Home() {
-  const conversionRate = 0.99;
   const wallet = useActiveWallet();
+  const account = useActiveAccount();
+
   const [isSwitched, setIsSwitched] = useState(false);
 
   const handleSwitch = () => {
     setIsSwitched(!isSwitched);
+
     // set both input boxes to empty
     const usdcInput = document.getElementById("usdcInput") as HTMLInputElement;
     const sbcInput = document.getElementById("sbcInput") as HTMLInputElement;
@@ -106,7 +175,7 @@ export default function Home() {
                   ) as HTMLInputElement;
                   if (input) {
                     input.value = sbcBalance
-                      ? (Number(sbcBalance.displayValue) / 2).toString()
+                      ? (Number(sbcBalance.displayValue) / 2).toFixed(3)
                       : "0";
                     // trigger onInput event to update usdc input
                     input.dispatchEvent(
@@ -128,7 +197,7 @@ export default function Home() {
                   ) as HTMLInputElement;
                   if (input) {
                     input.value = sbcBalance
-                      ? sbcBalance.displayValue.toString()
+                      ? Number(sbcBalance.displayValue).toFixed(3)
                       : "0";
                     // trigger onInput event to update usdc input
                     input.dispatchEvent(
@@ -146,25 +215,27 @@ export default function Home() {
           )}
 
           <span className="font-bold">
-            Balance: {sbcIsLoading ? "Loading..." : sbcBalance?.displayValue}
+            Balance:{" "}
+            {sbcIsLoading
+              ? "Loading..."
+              : sbcBalance && Number(sbcBalance.displayValue).toFixed(3)}
           </span>
         </p>
         <input
           id="sbcInput"
           type="text"
-          className="mt-auto p-2 text-lg border border-zinc-600 font-extrabold text-zinc-600 rounded w-full"
+          className="mt-auto p-2 text-lg border border-zinc-600 font-extrabold text-zinc-600 rounded w-full text-right"
           placeholder="Enter amount"
-          onInput={(e) => {
+          onInput={async (e) => {
             const input = e.target as HTMLInputElement;
             input.value = input.value.replace(/[^0-9.]/g, "");
             // update usdc input with converted value based on current conversionRate
             const usdcInput = document.getElementById(
               "usdcInput",
             ) as HTMLInputElement;
+            const usdcOut = await quoteSbcToUsdc(input.value);
             if (isSwitched && usdcInput) {
-              usdcInput.value = input.value
-                ? (Number(input.value) / (1 / conversionRate)).toString()
-                : "";
+              usdcInput.value = input.value ? usdcOut.toFixed(3) : "";
             }
           }}
         />
@@ -187,7 +258,7 @@ export default function Home() {
                   ) as HTMLInputElement;
                   if (input) {
                     input.value = usdcBalance
-                      ? (Number(usdcBalance.displayValue) / 2).toString()
+                      ? (Number(usdcBalance.displayValue) / 2).toFixed(3)
                       : "0";
                     // trigger onInput event to update sbc input
                     input.dispatchEvent(
@@ -209,7 +280,7 @@ export default function Home() {
                   ) as HTMLInputElement;
                   if (input) {
                     input.value = usdcBalance
-                      ? usdcBalance.displayValue.toString()
+                      ? Number(usdcBalance.displayValue).toFixed(3)
                       : "0";
                     // trigger onInput event to update sbc input
                     input.dispatchEvent(
@@ -227,28 +298,28 @@ export default function Home() {
           )}
 
           <span className="font-bold">
-            Balance: {usdcIsLoading ? "Loading..." : usdcBalance?.displayValue}
+            Balance:{" "}
+            {usdcIsLoading
+              ? "Loading..."
+              : usdcBalance && Number(usdcBalance.displayValue).toFixed(3)}
           </span>
         </p>
         <input
           id="usdcInput"
           type="text"
-          className="mt-auto p-2 text-lg border border-zinc-600 font-extrabold text-zinc-600 rounded w-full"
+          className="mt-auto p-2 text-lg border border-zinc-600 font-extrabold text-zinc-600 rounded w-full text-right"
           placeholder="Enter amount"
-          onInput={(e) => {
+          onInput={async (e) => {
             const input = e.target as HTMLInputElement;
             input.value = input.value.replace(/[^0-9.]/g, "");
-            console.log(`input.value: ${input.value}`);
 
-            // update sbc input with converted value based on current conversionRate
+            // update sbc input with converted value based on current rate from the pool
             const sbcInput = document.getElementById(
               "sbcInput",
             ) as HTMLInputElement;
-            console.log(`sbcInput: ${sbcInput}; isSwitched: ${isSwitched}`);
+            const sbcOut = await quoteUsdcToSbc(input.value);
             if (!isSwitched && sbcInput) {
-              sbcInput.value = input.value
-                ? (Number(input.value) * conversionRate).toString()
-                : "";
+              sbcInput.value = input.value ? sbcOut.toFixed(3) : "";
             }
           }}
         />
@@ -256,19 +327,89 @@ export default function Home() {
     );
   }
 
-  function doSwap() {
+  // function to return polygon scanner link for a transaction hash
+  function getPolygonScanLink(transactionHash: string) {
+    return `https://polygonscan.com/tx/${transactionHash}`;
+  }
+
+  async function getPoolData() {
+    const [slot0, liquidity] = await Promise.all([
+      poolContract.slot0(),
+      poolContract.liquidity(),
+    ]);
+
+    const fullPool = new Pool(
+      USDC,
+      SBC,
+      FeeAmount.LOWEST,
+      slot0.sqrtPriceX96,
+      liquidity,
+      slot0.tick,
+    );
+    return fullPool;
+  }
+
+  async function quoteUsdcToSbc(usdcAmount: string) {
+    const pool = await getPoolData();
+    return Number(usdcAmount) * Number(pool.token0Price.toSignificant());
+  }
+
+  async function quoteSbcToUsdc(sbcAmount: string) {
+    const pool = await getPoolData();
+    return Number(sbcAmount) * Number(pool.token1Price.toSignificant());
+  }
+
+  async function swapUsdcToSbc(usdcAmount: string) {
+    const usdcAmountBigNumber = ethers.utils.parseUnits(usdcAmount, 6);
+
+    const EXACT_OUTPUT = false;
+    const usdcToken = new Token(1, usdcPolygon, 6);
+    const sbcToken = new Token(1, sbcPolygon, 18);
+
+    const fullPool = await getPoolData();
+    const route = new Route([fullPool], usdcToken, sbcToken);
+    const path = encodeRouteToPath(route, EXACT_OUTPUT);
+    const transaction = exactInput({
+      contract: uniswapRouterPolygon,
+      params: {
+        path: path as Hex,
+        recipient: wallet!.getAccount()!.address,
+        deadline: BigInt(Math.floor(Date.now() / 1000) + 60 * 20), // 20 minutes
+        amountIn: usdcAmountBigNumber.toBigInt(),
+        amountOutMinimum: 0n, // infinite slippage
+      },
+    });
+
+    if (!account) {
+      return { error: "No account for swapUsdcToSbc" };
+    }
+    const { transactionHash } = await sendTransaction({
+      transaction,
+      account,
+    });
+
+    console.log(`transaction: ${getPolygonScanLink(transactionHash)}`);
+  }
+
+  async function doSwap() {
     const usdcInput = document.getElementById("usdcInput") as HTMLInputElement;
     const sbcInput = document.getElementById("sbcInput") as HTMLInputElement;
     const usdcAmount = usdcInput ? usdcInput.value : "";
     const sbcAmount = sbcInput ? sbcInput.value : "";
 
-    if (isSwitched) {
-      console.log(`Swapping ${sbcAmount} SBC for ${usdcAmount} USDC`);
-    } else {
-      console.log(`Swapping ${usdcAmount} USDC for ${sbcAmount} SBC`);
+    // if both inputs are empty, return
+    if (!usdcAmount && !sbcAmount) {
+      return;
     }
 
-    // Add your swap logic here
+    if (isSwitched) {
+      const rate = await quoteSbcToUsdc(sbcAmount);
+      console.log(`Swapping ${sbcAmount} SBC for ${usdcAmount} USDC`);
+    } else {
+      const rate = await quoteUsdcToSbc(usdcAmount);
+      console.log(`Swapping ${usdcAmount} USDC for ${rate} SBC`);
+      // await swapUsdcToSbc(usdcAmount);
+    }
   }
 
   return (
@@ -314,7 +455,9 @@ export default function Home() {
 
         <div className="flex justify-center mt-8">
           <button
-            onClick={() => doSwap()}
+            onClick={async () => {
+              await doSwap();
+            }}
             className="px-4 py-2 bg-blue-600 text-white rounded"
           >
             Swap
@@ -322,69 +465,5 @@ export default function Home() {
         </div>
       </div>
     </main>
-  );
-}
-
-function Header() {
-  return (
-    <header className="flex flex-col items-center mb-20 md:mb-20">
-      <h1 className="text-2xl font-semibold tracking-tighter text-zinc-100">
-        Stable Coin | Gasless Swap
-      </h1>
-
-      <p className="text-zinc-300 text-base">
-        A gasless swap of USDC to SBC from{" "}
-        <a
-          href="https://stablecoin.xyz"
-          target="_blank"
-          className="text-zinc-400 underline"
-        >
-          stablecoin.xyz
-        </a>
-      </p>
-    </header>
-  );
-}
-
-function ThirdwebResources() {
-  return (
-    <div className="grid gap-4 lg:grid-cols-3 justify-center">
-      <ArticleCard
-        title="thirdweb SDK Docs"
-        href="https://portal.thirdweb.com/typescript/v5"
-        description="thirdweb TypeScript SDK documentation"
-      />
-
-      <ArticleCard
-        title="Components and Hooks"
-        href="https://portal.thirdweb.com/typescript/v5/react"
-        description="Learn about the thirdweb React components and hooks in thirdweb SDK"
-      />
-
-      <ArticleCard
-        title="thirdweb Dashboard"
-        href="https://thirdweb.com/dashboard"
-        description="Deploy, configure, and manage your smart contracts from the dashboard."
-      />
-    </div>
-  );
-}
-
-function ArticleCard(props: {
-  title: string;
-  href: string;
-  description: string;
-}) {
-  return (
-    <a
-      href={props.href + "?utm_source=next-template"}
-      target="_blank"
-      className="flex flex-col border border-zinc-800 p-4 rounded-lg hover:bg-zinc-900 transition-colors hover:border-zinc-700"
-    >
-      <article>
-        <h2 className="text-lg font-semibold mb-2">{props.title}</h2>
-        <p className="text-sm text-zinc-400">{props.description}</p>
-      </article>
-    </a>
   );
 }
