@@ -1,8 +1,8 @@
 "use client";
 
 import React, { useCallback, useEffect, useState } from "react";
-import { BigNumber, ethers, providers } from "ethers";
-import { getContract, Hex, sendTransaction } from "thirdweb";
+import { ethers } from "ethers";
+
 import {
   ConnectButton,
   useActiveAccount,
@@ -10,44 +10,28 @@ import {
   useWalletBalance,
 } from "thirdweb/react";
 import { polygon } from "thirdweb/chains";
-import { ethers5Adapter } from "thirdweb/adapters/ethers5";
-import {
-  createPool,
-  exactInput,
-  getPool,
-  getUniswapV3Pool,
-  quoteExactInput,
-} from "thirdweb/extensions/uniswap";
-import {
-  encodeRouteToPath,
-  FACTORY_ADDRESS,
-  Pool,
-  Route,
-} from "@uniswap/v3-sdk";
-import { Currency, Price, Token } from "@uniswap/sdk-core";
+import { createWallet } from "thirdweb/wallets";
+
+import { encodeRouteToPath, FeeAmount, Pool, Route } from "@uniswap/v3-sdk";
 import IUniswapV3PoolABI from "@uniswap/v3-core/artifacts/contracts/interfaces/IUniswapV3Pool.sol/IUniswapV3Pool.json";
 
-import { client } from "./client";
+import { USDC, SBC } from "@/lib/constants";
+import { TokenTrade, createTrade, executeTrade } from "@/lib/trading";
+import {
+  connectBrowserExtensionWallet,
+  // getProvider,
+  getPolygonProvider,
+  getPolygonScanLink,
+  TransactionState,
+} from "@/lib/providers";
+
 import { Header } from "@/components/Header";
 import DisconnectIcon from "@/components/DisconnectIcon";
 import SwitchIcon from "@/components/SwitchIcon";
 
-enum FeeAmount {
-  LOWEST = 100,
-  LOW = 500,
-  MEDIUM = 3000,
-  HIGH = 10000,
-}
-
-const polygonProvider = new ethers.providers.JsonRpcProvider(
-  "https://polygon-rpc.com",
-);
-
-const usdcPolygon = "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359";
-const sbcPolygon = "0xfdcC3dd6671eaB0709A4C0f3F53De9a333d80798";
-
-const USDC = new Token(1, usdcPolygon, 6, "USDC", "USD Coin");
-const SBC = new Token(1, sbcPolygon, 18, "SBC", "Stable Coin");
+import { client } from "./client";
+import { CurrentConfig } from "@/config";
+import { ethers5Adapter } from "thirdweb/adapters/ethers5";
 
 const USDC_SBC_UNISWAP_POOL_ADDRESS =
   "0x98A5a5D8D448A90C5378A07e30Da5148679b4C45";
@@ -55,52 +39,43 @@ const USDC_SBC_UNISWAP_POOL_ADDRESS =
 const poolContract = new ethers.Contract(
   USDC_SBC_UNISWAP_POOL_ADDRESS,
   IUniswapV3PoolABI.abi,
-  polygonProvider,
+  getPolygonProvider(),
 );
 
+// const useOnBlockUpdated = (callback: (blockNumber: number) => void) => {
+//   useEffect(() => {
+//     const subscription = getProvider()?.on("block", callback);
+//     return () => {
+//       subscription?.removeAllListeners();
+//     };
+//   });
+// };
+
 // https://docs.uniswap.org/contracts/v3/reference/deployments/polygon-deployments
-const uniswapRouterPolygon = getContract({
-  client,
-  address: "0xE592427A0AEce92De3Edee1F18E0157C05861564",
-  chain: polygon,
-});
-
-// async function connectBrowserExtensionWallet() {
-//   if (!(window as any).ethereum) {
-//     return null;
-//   }
-
-//   const { ethereum } = window as any;
-//   const provider = new ethers.providers.Web3Provider(ethereum);
-//   const accounts = await provider.send("eth_requestAccounts", []);
-
-//   if (accounts.length !== 1) {
-//     return;
-//   }
-
-//   const walletExtensionAddress = accounts[0];
-//   return walletExtensionAddress;
-// }
-
-// function createBrowserExtensionProvider(): ethers.providers.Web3Provider | null {
-//   try {
-//     const provider = new ethers.providers.Web3Provider(
-//       (window as any)?.ethereum,
-//       "any",
-//     );
-//     console.log(`Wallet Extension Found: ${provider}`);
-//     return provider;
-//   } catch (e) {
-//     console.log("No Wallet Extension Found");
-//     return null;
-//   }
-// }
+// const uniswapRouterPolygon = getContract({
+//   client,
+//   address: "0xE592427A0AEce92De3Edee1F18E0157C05861564",
+//   chain: polygon,
+// });
 
 export default function Home() {
   const wallet = useActiveWallet();
   const account = useActiveAccount();
 
+  // console.log("wallet:", wallet);
+  // console.log("account:", account);
+
   const [isSwitched, setIsSwitched] = useState(false);
+  const [blockNumber, setBlockNumber] = useState<number>(0);
+  const [trade, setTrade] = useState<TokenTrade>();
+  const [txState, setTxState] = useState<TransactionState>(
+    TransactionState.New,
+  );
+
+  // useOnBlockUpdated(async (blockNumber: number) => {
+  //   // refreshBalances();
+  //   setBlockNumber(blockNumber);
+  // });
 
   const handleSwitch = () => {
     setIsSwitched(!isSwitched);
@@ -124,6 +99,10 @@ export default function Home() {
     console.log(`chainChanged: ${chain}`);
   });
 
+  wallet?.subscribe("onConnect", (walletId) => {
+    console.log(`onConnect: ${walletId}`);
+  });
+
   const {
     data: usdcBalance,
     isLoading: usdcIsLoading,
@@ -132,7 +111,7 @@ export default function Home() {
     address: wallet?.getAccount()?.address,
     chain: polygon,
     client,
-    tokenAddress: usdcPolygon,
+    tokenAddress: USDC.address,
   });
 
   const {
@@ -143,7 +122,7 @@ export default function Home() {
     address: wallet?.getAccount()?.address,
     chain: polygon,
     client,
-    tokenAddress: sbcPolygon,
+    tokenAddress: SBC.address,
   });
 
   function Switcher() {
@@ -327,11 +306,6 @@ export default function Home() {
     );
   }
 
-  // function to return polygon scanner link for a transaction hash
-  function getPolygonScanLink(transactionHash: string) {
-    return `https://polygonscan.com/tx/${transactionHash}`;
-  }
-
   async function getPoolData() {
     const [slot0, liquidity] = await Promise.all([
       poolContract.slot0(),
@@ -360,55 +334,79 @@ export default function Home() {
   }
 
   async function swapUsdcToSbc(usdcAmount: string) {
-    const usdcAmountBigNumber = ethers.utils.parseUnits(usdcAmount, 6);
-
-    const EXACT_OUTPUT = false;
-    const usdcToken = new Token(1, usdcPolygon, 6);
-    const sbcToken = new Token(1, sbcPolygon, 18);
-
-    const fullPool = await getPoolData();
-    const route = new Route([fullPool], usdcToken, sbcToken);
-    const path = encodeRouteToPath(route, EXACT_OUTPUT);
-    const transaction = exactInput({
-      contract: uniswapRouterPolygon,
-      params: {
-        path: path as Hex,
-        recipient: wallet!.getAccount()!.address,
-        deadline: BigInt(Math.floor(Date.now() / 1000) + 60 * 20), // 20 minutes
-        amountIn: usdcAmountBigNumber.toBigInt(),
-        amountOutMinimum: 0n, // infinite slippage
-      },
+    const config = CurrentConfig;
+    config.tokens.amountIn = Number(usdcAmount);
+    config.tokens.in = USDC;
+    config.tokens.out = SBC;
+    config.provider = ethers5Adapter.provider.toEthers({
+      chain: polygon,
+      client,
     });
+    config.wallet = await ethers5Adapter.signer.toEthers({
+      chain: polygon,
+      client,
+      account: account!,
+    });
+    config.account = account;
 
-    if (!account) {
-      return { error: "No account for swapUsdcToSbc" };
+    if (!config.account.address) {
+      console.error("No wallet address found");
+      return;
     }
-    const { transactionHash } = await sendTransaction({
-      transaction,
-      account,
-    });
 
-    console.log(`transaction: ${getPolygonScanLink(transactionHash)}`);
+    const trade = await createTrade(config);
+    if (!trade) {
+      console.error("No trade created");
+      return;
+    }
+    const executedTradeStatus = await executeTrade(trade, config);
+    console.log(`Executed trade: ${executedTradeStatus}`);
+  }
+
+  async function swapSbcToUsdc(sbcAmount: string) {
+    const config = CurrentConfig;
+    config.tokens.amountIn = Number(sbcAmount);
+    config.tokens.in = SBC;
+    config.tokens.out = USDC;
+    config.provider = ethers5Adapter.provider.toEthers({
+      chain: polygon,
+      client,
+    });
+    config.wallet = await ethers5Adapter.signer.toEthers({
+      chain: polygon,
+      client,
+      account: account!,
+    });
+    config.account = account;
+
+    if (!config.account.address) {
+      console.error("No wallet address found");
+      return;
+    }
+
+    const trade = await createTrade(config);
+    if (!trade) {
+      console.error("No trade created");
+      return;
+    }
+    const executedTradeStatus = await executeTrade(trade, config);
+    console.log(`Executed trade: ${executedTradeStatus}`);
   }
 
   async function doSwap() {
-    const usdcInput = document.getElementById("usdcInput") as HTMLInputElement;
-    const sbcInput = document.getElementById("sbcInput") as HTMLInputElement;
-    const usdcAmount = usdcInput ? usdcInput.value : "";
-    const sbcAmount = sbcInput ? sbcInput.value : "";
-
-    // if both inputs are empty, return
+    const { usdcAmount, sbcAmount } = getTradeAmounts();
     if (!usdcAmount && !sbcAmount) {
       return;
     }
 
     if (isSwitched) {
       const rate = await quoteSbcToUsdc(sbcAmount);
-      console.log(`Swapping ${sbcAmount} SBC for ${usdcAmount} USDC`);
+      console.log(`Swapping ${sbcAmount} SBC for ${rate} USDC`);
+      await swapSbcToUsdc(sbcAmount);
     } else {
       const rate = await quoteUsdcToSbc(usdcAmount);
       console.log(`Swapping ${usdcAmount} USDC for ${rate} SBC`);
-      // await swapUsdcToSbc(usdcAmount);
+      await swapUsdcToSbc(usdcAmount);
     }
   }
 
@@ -417,10 +415,11 @@ export default function Home() {
       <div className="py-14">
         <Header />
 
-        <div className="flex justify-center mb-14">
-          <div className="flex flex-row">
+        <div className="flex justify-center">
+          <div className="flex flex-row -mt-12 mb-16">
             <ConnectButton
               client={client}
+              wallets={[createWallet("io.metamask")]}
               appMetadata={{
                 name: "Stable Coin | Gasless Swap",
                 url: "https://stablecoin.xyz",
@@ -438,7 +437,6 @@ export default function Home() {
             )}
           </div>
         </div>
-
         {isSwitched ? (
           <>
             <SbcContainer />
@@ -452,18 +450,37 @@ export default function Home() {
             <SbcContainer />
           </>
         )}
-
         <div className="flex justify-center mt-8">
           <button
             onClick={async () => {
               await doSwap();
             }}
-            className="px-4 py-2 bg-blue-600 text-white rounded"
+            className="px-4 py-2 bg-blue-600 text-white rounded disabled:cursor-not-allowed disabled:bg-blue-400"
+            disabled={
+              account === undefined ||
+              // txState === TransactionState.Sending ||
+              // txState === TransactionState.Confirming ||
+              (window as any).ethereum === undefined // TODO: fix these conditions
+            }
           >
             Swap
           </button>
         </div>
+        <div
+          className="text-zinc-300 text-xs absolute top-4 right-6"
+          style={{ zIndex: 1000 }}
+        >
+          {blockNumber > 0 && <span>Block: {blockNumber}</span>}
+        </div>
       </div>
     </main>
   );
+
+  function getTradeAmounts() {
+    const usdcInput = document.getElementById("usdcInput") as HTMLInputElement;
+    const sbcInput = document.getElementById("sbcInput") as HTMLInputElement;
+    const usdcAmount = usdcInput ? usdcInput.value : "";
+    const sbcAmount = sbcInput ? sbcInput.value : "";
+    return { usdcAmount, sbcAmount };
+  }
 }

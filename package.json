@@ -1,7 +1,8 @@
 {
-  "name": "sbc-gasless-swap",
+  "name": "gasless-swap",
   "version": "0.1.0",
   "private": true,
+  "author": "Stable Coin Inc.",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -14,6 +15,7 @@
     "@uniswap/v3-periphery": "^1.4.4",
     "@uniswap/v3-sdk": "^3.14.0",
     "ethers": "^5.7.2",
+    "jsbi": "3.2.5",
     "next": "14.1.0",
     "react": "^18.3",
     "react-dom": "^18.3",
