@@ -1,10 +1,10 @@
-import IUniswapV3PoolABI from "@uniswap/v3-core/artifacts/contracts/interfaces/IUniswapV3Pool.sol/IUniswapV3Pool.json";
-import { computePoolAddress } from "@uniswap/v3-sdk";
 import { ethers } from "ethers";
+import IUniswapV3PoolABI from "@uniswap/v3-core/artifacts/contracts/interfaces/IUniswapV3Pool.sol/IUniswapV3Pool.json";
+import { computePoolAddress, FeeAmount, Pool } from "@uniswap/v3-sdk";
 
 import { CurrentConfig } from "@/config";
-import { POOL_FACTORY_CONTRACT_ADDRESS } from "@/lib/constants";
-// import { getProvider } from "@/lib/providers";
+import { POOL_FACTORY_CONTRACT_ADDRESS, USDC, SBC } from "@/lib/constants";
+import { getPolygonProvider } from "@/lib/providers";
 
 interface PoolInfo {
   token0: string;
@@ -16,10 +16,28 @@ interface PoolInfo {
   tick: number;
 }
 
+export async function getPoolData(
+  poolContract: ethers.Contract,
+): Promise<Pool> {
+  const [slot0, liquidity] = await Promise.all([
+    poolContract.slot0(),
+    poolContract.liquidity(),
+  ]);
+
+  const fullPool = new Pool(
+    USDC,
+    SBC,
+    FeeAmount.LOWEST,
+    slot0.sqrtPriceX96,
+    liquidity,
+    slot0.tick,
+  );
+  return fullPool;
+}
+
 export async function getPoolInfo(
-  provider: ethers.providers.Web3Provider,
+  provider: ethers.providers.BaseProvider,
 ): Promise<PoolInfo> {
-  // const provider = getProvider();
   if (!provider) {
     throw new Error("No provider");
   }
@@ -57,3 +75,12 @@ export async function getPoolInfo(
     tick: slot0[1],
   };
 }
+
+const USDC_SBC_UNISWAP_POOL_ADDRESS =
+  "0x98A5a5D8D448A90C5378A07e30Da5148679b4C45";
+
+export const sbcPoolContract = new ethers.Contract(
+  USDC_SBC_UNISWAP_POOL_ADDRESS,
+  IUniswapV3PoolABI.abi,
+  getPolygonProvider(),
+);

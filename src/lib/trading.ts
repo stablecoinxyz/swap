@@ -25,13 +25,8 @@ import {
   MAX_PRIORITY_FEE_PER_GAS,
 } from "@/lib/constants";
 import { getPoolInfo } from "@/lib/pool";
-import {
-  // getProvider,
-  // getWalletAddress,
-  sendTransaction,
-  TransactionState,
-} from "@/lib/providers";
-import { fromReadableAmount } from "@/lib/utils";
+import { sendTransaction, TransactionState } from "@/lib/providers";
+import { fromReadableAmount } from "@/lib/extras";
 
 export type TokenTrade = Trade<Token, Token, TradeType>;
 
@@ -41,10 +36,10 @@ export async function createTrade(
   config: TradeConfig,
   inverse = false,
 ): Promise<TokenTrade> {
-  const provider = new ethers.providers.Web3Provider(
-    (window as any).ethereum,
-    "any",
-  );
+  if (!config.provider) {
+    throw new Error("Provider required to create trade");
+  }
+  const provider = config.provider;
   const poolInfo = await getPoolInfo(provider);
 
   const inToken = inverse ? config.tokens.out : config.tokens.in;
@@ -82,7 +77,10 @@ export async function createTrade(
 export async function executeTrade(
   trade: TokenTrade,
   config: TradeConfig,
-): Promise<TransactionState> {
+): Promise<{
+  txState: TransactionState;
+  receipt: ethers.providers.TransactionReceipt | null;
+}> {
   if (!config.wallet || !config.account.address || !config.provider) {
     throw new Error("Cannot execute a trade without a connected wallet");
   }
@@ -90,6 +88,9 @@ export async function executeTrade(
   const walletAddress = config.account.address;
 
   // Check if the token transfer is approved
+  console.debug(
+    `Checking token approval for ${config.tokens.in.symbol}; amount ${config.tokens.amountIn}; address: ${walletAddress}`,
+  );
   const isApproved = await checkTokenApproval(
     config.tokens.in,
     config.tokens.amountIn,
@@ -99,36 +100,39 @@ export async function executeTrade(
 
   // If the token transfer is not approved, approve it
   if (!isApproved) {
-    const approval = await getTokenTransferApproval(config);
+    const { txState: approval } = await getTokenTransferApproval(config);
 
     if (approval !== TransactionState.Sent) {
       console.error("Token Approval Failed");
-      return TransactionState.Failed;
+      return {
+        txState: TransactionState.Failed,
+        receipt: null,
+      };
     }
   }
-  console.log(`Token ${config.tokens.in.symbol} Approved`);
 
   const options: SwapOptions = {
-    slippageTolerance: new Percent(50, 10_000), // 50 bips, or 0.50%
-    deadline: Math.floor(Date.now() / 1000) + 60 * 20, // 20 minutes from the current Unix time
+    // 50 bips, or 0.50%
+    slippageTolerance: new Percent(50, 10_000),
+
+    // 20 minutes from the current Unix time
+    deadline: Math.floor(Date.now() / 1000) + 60 * 20,
+
     recipient: walletAddress,
   };
 
   const methodParameters = SwapRouter.swapCallParameters([trade], options);
-  console.log("Method Parameters", methodParameters);
 
   const tx = {
     data: methodParameters.calldata,
     to: SWAP_ROUTER_ADDRESS,
     value: methodParameters.value,
-    from: config.wallet.address,
+    from: walletAddress,
     maxFeePerGas: MAX_FEE_PER_GAS,
     maxPriorityFeePerGas: MAX_PRIORITY_FEE_PER_GAS,
   };
 
-  const res = await sendTransaction(tx, config);
-
-  return res;
+  return await sendTransaction(tx, config);
 }
 
 // Helper Quoting and Pool Functions
@@ -173,7 +177,7 @@ export async function checkTokenApproval(
   provider: any,
 ): Promise<boolean> {
   if (!provider || !address) {
-    console.log("No Provider Found");
+    console.error("No Provider Found");
     return false;
   }
 
@@ -190,7 +194,7 @@ export async function checkTokenApproval(
     );
 
     const status = allowance.gte(fromReadableAmount(amountIn, token.decimals));
-    console.log("Allowance", allowance, status);
+    console.debug("Allowance", allowance, status);
     return status;
   } catch (e) {
     console.error(e);
@@ -198,14 +202,18 @@ export async function checkTokenApproval(
   }
 }
 
-export async function getTokenTransferApproval(
-  config: TradeConfig,
-): Promise<TransactionState> {
-  const provider = config.provider; //getProvider();
-  const address = config.account.address; //getWalletAddress();
+export async function getTokenTransferApproval(config: TradeConfig): Promise<{
+  txState: TransactionState;
+  receipt: ethers.providers.TransactionReceipt | null;
+}> {
+  const provider = config.provider;
+  const address = config.account.address;
   if (!provider || !address) {
-    console.log("getTokenTransferApproval :: No Provider Found");
-    return TransactionState.Failed;
+    console.error("getTokenTransferApproval :: No Provider Found");
+    return {
+      txState: TransactionState.Failed,
+      receipt: null,
+    };
   }
 
   try {
@@ -232,6 +240,9 @@ export async function getTokenTransferApproval(
     );
   } catch (e) {
     console.error(e);
-    return TransactionState.Failed;
+    return {
+      txState: TransactionState.Failed,
+      receipt: null,
+    };
   }
 }

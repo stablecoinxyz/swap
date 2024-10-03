@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useState } from "react";
 import { ethers } from "ethers";
 
 import {
@@ -11,96 +11,41 @@ import {
 } from "thirdweb/react";
 import { polygon } from "thirdweb/chains";
 import { createWallet } from "thirdweb/wallets";
+import { ethers5Adapter } from "thirdweb/adapters/ethers5";
 
-import { encodeRouteToPath, FeeAmount, Pool, Route } from "@uniswap/v3-sdk";
-import IUniswapV3PoolABI from "@uniswap/v3-core/artifacts/contracts/interfaces/IUniswapV3Pool.sol/IUniswapV3Pool.json";
-
+import { getPoolData } from "@/lib/pool";
 import { USDC, SBC } from "@/lib/constants";
-import { TokenTrade, createTrade, executeTrade } from "@/lib/trading";
-import {
-  connectBrowserExtensionWallet,
-  // getProvider,
-  getPolygonProvider,
-  getPolygonScanLink,
-  TransactionState,
-} from "@/lib/providers";
+import { createTrade, executeTrade } from "@/lib/trading";
+import { getPolygonScanUrl } from "@/lib/providers";
+import { sbcPoolContract } from "@/lib/pool";
 
 import { Header } from "@/components/Header";
 import DisconnectIcon from "@/components/DisconnectIcon";
 import SwitchIcon from "@/components/SwitchIcon";
 
-import { client } from "./client";
 import { CurrentConfig } from "@/config";
-import { ethers5Adapter } from "thirdweb/adapters/ethers5";
-
-const USDC_SBC_UNISWAP_POOL_ADDRESS =
-  "0x98A5a5D8D448A90C5378A07e30Da5148679b4C45";
-
-const poolContract = new ethers.Contract(
-  USDC_SBC_UNISWAP_POOL_ADDRESS,
-  IUniswapV3PoolABI.abi,
-  getPolygonProvider(),
-);
-
-// const useOnBlockUpdated = (callback: (blockNumber: number) => void) => {
-//   useEffect(() => {
-//     const subscription = getProvider()?.on("block", callback);
-//     return () => {
-//       subscription?.removeAllListeners();
-//     };
-//   });
-// };
-
-// https://docs.uniswap.org/contracts/v3/reference/deployments/polygon-deployments
-// const uniswapRouterPolygon = getContract({
-//   client,
-//   address: "0xE592427A0AEce92De3Edee1F18E0157C05861564",
-//   chain: polygon,
-// });
+import { ToastAction } from "@/components/ui/toast";
+import { useToast } from "@/hooks/use-toast";
+import { client } from "@/app/client";
 
 export default function Home() {
   const wallet = useActiveWallet();
   const account = useActiveAccount();
 
-  // console.log("wallet:", wallet);
-  // console.log("account:", account);
-
   const [isSwitched, setIsSwitched] = useState(false);
-  const [blockNumber, setBlockNumber] = useState<number>(0);
-  const [trade, setTrade] = useState<TokenTrade>();
-  const [txState, setTxState] = useState<TransactionState>(
-    TransactionState.New,
-  );
 
-  // useOnBlockUpdated(async (blockNumber: number) => {
-  //   // refreshBalances();
-  //   setBlockNumber(blockNumber);
-  // });
-
-  const handleSwitch = () => {
-    setIsSwitched(!isSwitched);
-
-    // set both input boxes to empty
-    const usdcInput = document.getElementById("usdcInput") as HTMLInputElement;
-    const sbcInput = document.getElementById("sbcInput") as HTMLInputElement;
-    if (usdcInput) {
-      usdcInput.value = "";
-    }
-    if (sbcInput) {
-      sbcInput.value = "";
-    }
-  };
+  const { toast } = useToast();
 
   wallet?.subscribe("accountChanged", (account) => {
-    console.log(`accountChanged: ${account}`);
+    console.debug(`accountChanged: ${account}`);
   });
 
   wallet?.subscribe("chainChanged", (chain) => {
-    console.log(`chainChanged: ${chain}`);
+    console.debug(`chainChanged: ${chain}`);
   });
 
   wallet?.subscribe("onConnect", (walletId) => {
-    console.log(`onConnect: ${walletId}`);
+    console.debug(`onConnect: ${walletId}`);
   });
 
   const {
@@ -124,6 +69,170 @@ export default function Home() {
     client,
     tokenAddress: SBC.address,
   });
+
+  return (
+    <main className="px-4 pb-10 min-h-[100vh] flex items-center justify-center container max-w-screen-lg mx-auto">
+      <div className="py-14">
+        <Header />
+
+        <div className="flex justify-center">
+          <div className="flex flex-row -mt-12 mb-16">
+            <ConnectButton
+              client={client}
+              wallets={[createWallet("io.metamask")]}
+              appMetadata={{
+                name: "Stable Coin | Gasless Swap",
+                url: "https://stablecoin.xyz",
+              }}
+            />
+            {wallet && (
+              <button
+                onClick={() => wallet.disconnect()}
+                className="ml-2 px-2 py-2 bg-white-600 text-white rounded flex items-center justify-center"
+                style={{ height: "40px" }} // Adjust height to match ConnectButton
+                aria-label="Disconnect"
+              >
+                <DisconnectIcon />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {isSwitched ? (
+          <>
+            <SbcContainer />
+            <Switcher />
+            <UsdcContainer />
+          </>
+        ) : (
+          <>
+            <UsdcContainer />
+            <Switcher />
+            <SbcContainer />
+          </>
+        )}
+
+        <div className="flex justify-center mt-8">
+          <button
+            onClick={async () => {
+              toast({
+                title: "Performing Swap",
+                description: `Please wait while we process your transaction...`,
+                duration: 9000,
+                onClick: () => {
+                  window.open(getPolygonScanUrl(receipt!.transactionHash));
+                },
+              });
+
+              const receipt = await doSwap();
+
+              resetTradeAmounts();
+
+              toast({
+                title: "Transaction Sent",
+                action: (
+                  <ToastAction altText="View on PolygonScan">
+                    View Status
+                  </ToastAction>
+                ),
+                description: `🎉 Check your transaction status 👉🏻`,
+                duration: 9000,
+                onClick: () => {
+                  window.open(getPolygonScanUrl(receipt!.transactionHash));
+                },
+              });
+            }}
+            className="px-4 py-2 bg-blue-600 text-white rounded disabled:cursor-not-allowed disabled:bg-blue-400"
+            disabled={
+              account === undefined || (window as any).ethereum === undefined
+            }
+          >
+            Swap
+          </button>
+        </div>
+      </div>
+    </main>
+  );
+
+  function handleSwitch() {
+    setIsSwitched(!isSwitched);
+    resetTradeAmounts();
+  }
+
+  async function quoteUsdcToSbc(usdcAmount: string) {
+    const pool = await getPoolData(sbcPoolContract);
+    return Number(usdcAmount) * Number(pool.token0Price.toSignificant());
+  }
+
+  async function quoteSbcToUsdc(sbcAmount: string) {
+    const pool = await getPoolData(sbcPoolContract);
+    return Number(sbcAmount) * Number(pool.token1Price.toSignificant());
+  }
+
+  async function doSwap(): Promise<ethers.providers.TransactionReceipt | null> {
+    const { usdcAmount, sbcAmount } = getTradeAmounts();
+    if (!usdcAmount && !sbcAmount) {
+      return null;
+    }
+
+    const config = CurrentConfig;
+    config.provider = ethers5Adapter.provider.toEthers({
+      chain: polygon,
+      client,
+    });
+    config.wallet = await ethers5Adapter.signer.toEthers({
+      chain: polygon,
+      client,
+      account: account!,
+    });
+    config.account = account;
+    config.tokens.amountIn = isSwitched
+      ? Number(sbcAmount)
+      : Number(usdcAmount);
+    config.tokens.in = isSwitched ? SBC : USDC;
+    config.tokens.out = isSwitched ? USDC : SBC;
+
+    if (!config.account.address) {
+      console.error("No wallet address found");
+      return null;
+    }
+
+    const trade = await createTrade(config);
+    if (!trade) {
+      console.error("No trade created");
+      return null;
+    }
+
+    const { receipt, txState: executedTradeStatus } = await executeTrade(
+      trade,
+      config,
+    );
+
+    console.debug(
+      `Executed trade: ${executedTradeStatus}; Receipt: ${getPolygonScanUrl(receipt!.transactionHash)}`,
+    );
+
+    return receipt;
+  }
+
+  function getTradeAmounts() {
+    const usdcInput = document.getElementById("usdcInput") as HTMLInputElement;
+    const sbcInput = document.getElementById("sbcInput") as HTMLInputElement;
+    const usdcAmount = usdcInput ? usdcInput.value : "";
+    const sbcAmount = sbcInput ? sbcInput.value : "";
+    return { usdcAmount, sbcAmount };
+  }
+
+  function resetTradeAmounts() {
+    const usdcInput = document.getElementById("usdcInput") as HTMLInputElement;
+    const sbcInput = document.getElementById("sbcInput") as HTMLInputElement;
+    if (usdcInput) {
+      usdcInput.value = "";
+    }
+    if (sbcInput) {
+      sbcInput.value = "";
+    }
+  }
 
   function Switcher() {
     return (
@@ -292,7 +401,6 @@ export default function Home() {
             const input = e.target as HTMLInputElement;
             input.value = input.value.replace(/[^0-9.]/g, "");
 
-            // update sbc input with converted value based on current rate from the pool
             const sbcInput = document.getElementById(
               "sbcInput",
             ) as HTMLInputElement;
@@ -304,183 +412,5 @@ export default function Home() {
         />
       </div>
     );
-  }
-
-  async function getPoolData() {
-    const [slot0, liquidity] = await Promise.all([
-      poolContract.slot0(),
-      poolContract.liquidity(),
-    ]);
-
-    const fullPool = new Pool(
-      USDC,
-      SBC,
-      FeeAmount.LOWEST,
-      slot0.sqrtPriceX96,
-      liquidity,
-      slot0.tick,
-    );
-    return fullPool;
-  }
-
-  async function quoteUsdcToSbc(usdcAmount: string) {
-    const pool = await getPoolData();
-    return Number(usdcAmount) * Number(pool.token0Price.toSignificant());
-  }
-
-  async function quoteSbcToUsdc(sbcAmount: string) {
-    const pool = await getPoolData();
-    return Number(sbcAmount) * Number(pool.token1Price.toSignificant());
-  }
-
-  async function swapUsdcToSbc(usdcAmount: string) {
-    const config = CurrentConfig;
-    config.tokens.amountIn = Number(usdcAmount);
-    config.tokens.in = USDC;
-    config.tokens.out = SBC;
-    config.provider = ethers5Adapter.provider.toEthers({
-      chain: polygon,
-      client,
-    });
-    config.wallet = await ethers5Adapter.signer.toEthers({
-      chain: polygon,
-      client,
-      account: account!,
-    });
-    config.account = account;
-
-    if (!config.account.address) {
-      console.error("No wallet address found");
-      return;
-    }
-
-    const trade = await createTrade(config);
-    if (!trade) {
-      console.error("No trade created");
-      return;
-    }
-    const executedTradeStatus = await executeTrade(trade, config);
-    console.log(`Executed trade: ${executedTradeStatus}`);
-  }
-
-  async function swapSbcToUsdc(sbcAmount: string) {
-    const config = CurrentConfig;
-    config.tokens.amountIn = Number(sbcAmount);
-    config.tokens.in = SBC;
-    config.tokens.out = USDC;
-    config.provider = ethers5Adapter.provider.toEthers({
-      chain: polygon,
-      client,
-    });
-    config.wallet = await ethers5Adapter.signer.toEthers({
-      chain: polygon,
-      client,
-      account: account!,
-    });
-    config.account = account;
-
-    if (!config.account.address) {
-      console.error("No wallet address found");
-      return;
-    }
-
-    const trade = await createTrade(config);
-    if (!trade) {
-      console.error("No trade created");
-      return;
-    }
-    const executedTradeStatus = await executeTrade(trade, config);
-    console.log(`Executed trade: ${executedTradeStatus}`);
-  }
-
-  async function doSwap() {
-    const { usdcAmount, sbcAmount } = getTradeAmounts();
-    if (!usdcAmount && !sbcAmount) {
-      return;
-    }
-
-    if (isSwitched) {
-      const rate = await quoteSbcToUsdc(sbcAmount);
-      console.log(`Swapping ${sbcAmount} SBC for ${rate} USDC`);
-      await swapSbcToUsdc(sbcAmount);
-    } else {
-      const rate = await quoteUsdcToSbc(usdcAmount);
-      console.log(`Swapping ${usdcAmount} USDC for ${rate} SBC`);
-      await swapUsdcToSbc(usdcAmount);
-    }
-  }
-
-  return (
-    <main className="px-4 pb-10 min-h-[100vh] flex items-center justify-center container max-w-screen-lg mx-auto">
-      <div className="py-14">
-        <Header />
-
-        <div className="flex justify-center">
-          <div className="flex flex-row -mt-12 mb-16">
-            <ConnectButton
-              client={client}
-              wallets={[createWallet("io.metamask")]}
-              appMetadata={{
-                name: "Stable Coin | Gasless Swap",
-                url: "https://stablecoin.xyz",
-              }}
-            />
-            {wallet && (
-              <button
-                onClick={() => wallet.disconnect()}
-                className="ml-2 px-2 py-2 bg-white-600 text-white rounded flex items-center justify-center"
-                style={{ height: "40px" }} // Adjust height to match ConnectButton
-                aria-label="Disconnect"
-              >
-                <DisconnectIcon />
-              </button>
-            )}
-          </div>
-        </div>
-        {isSwitched ? (
-          <>
-            <SbcContainer />
-            <Switcher />
-            <UsdcContainer />
-          </>
-        ) : (
-          <>
-            <UsdcContainer />
-            <Switcher />
-            <SbcContainer />
-          </>
-        )}
-        <div className="flex justify-center mt-8">
-          <button
-            onClick={async () => {
-              await doSwap();
-            }}
-            className="px-4 py-2 bg-blue-600 text-white rounded disabled:cursor-not-allowed disabled:bg-blue-400"
-            disabled={
-              account === undefined ||
-              // txState === TransactionState.Sending ||
-              // txState === TransactionState.Confirming ||
-              (window as any).ethereum === undefined // TODO: fix these conditions
-            }
-          >
-            Swap
-          </button>
-        </div>
-        <div
-          className="text-zinc-300 text-xs absolute top-4 right-6"
-          style={{ zIndex: 1000 }}
-        >
-          {blockNumber > 0 && <span>Block: {blockNumber}</span>}
-        </div>
-      </div>
-    </main>
-  );
-
-  function getTradeAmounts() {
-    const usdcInput = document.getElementById("usdcInput") as HTMLInputElement;
-    const sbcInput = document.getElementById("sbcInput") as HTMLInputElement;
-    const usdcAmount = usdcInput ? usdcInput.value : "";
-    const sbcAmount = sbcInput ? sbcInput.value : "";
-    return { usdcAmount, sbcAmount };
   }
 }
