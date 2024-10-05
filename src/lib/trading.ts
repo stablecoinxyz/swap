@@ -18,15 +18,17 @@ import JSBI from "jsbi";
 
 import { CurrentConfig, TradeConfig } from "@/config";
 import {
-  ERC20_ABI,
   QUOTER_CONTRACT_ADDRESS,
   SWAP_ROUTER_ADDRESS,
   MAX_FEE_PER_GAS,
   MAX_PRIORITY_FEE_PER_GAS,
 } from "@/lib/constants";
-import { getPoolInfo } from "@/lib/pool";
-import { sendTransaction, TransactionState } from "@/lib/providers";
+import { getPoolData } from "@/lib/pool";
+import { TransactionState, publicClient } from "@/lib/providers";
 import { fromReadableAmount } from "@/lib/extras";
+
+import { erc20Abi, Hex, TransactionReceipt, WalletClient } from "viem";
+import { polygon } from "viem/chains";
 
 export type TokenTrade = Trade<Token, Token, TradeType>;
 
@@ -36,11 +38,7 @@ export async function createTrade(
   config: TradeConfig,
   inverse = false,
 ): Promise<TokenTrade> {
-  if (!config.provider) {
-    throw new Error("Provider required to create trade");
-  }
-  const provider = config.provider;
-  const poolInfo = await getPoolInfo(provider);
+  const poolData = await getPoolData();
 
   const inToken = inverse ? config.tokens.out : config.tokens.in;
   const outToken = inverse ? config.tokens.in : config.tokens.out;
@@ -49,9 +47,9 @@ export async function createTrade(
     inToken,
     outToken,
     config.tokens.poolFee,
-    poolInfo.sqrtPriceX96.toString(),
-    poolInfo.liquidity.toString(),
-    poolInfo.tick,
+    poolData.sqrtRatioX96,
+    poolData.liquidity,
+    poolData.tickCurrent,
   );
 
   const swapRoute = new Route([pool], inToken, outToken);
@@ -77,15 +75,16 @@ export async function createTrade(
 export async function executeTrade(
   trade: TokenTrade,
   config: TradeConfig,
+  wallet: WalletClient,
 ): Promise<{
   txState: TransactionState;
-  receipt: ethers.providers.TransactionReceipt | null;
+  receipt: TransactionReceipt | null;
 }> {
-  if (!config.wallet || !config.account.address || !config.provider) {
+  if (!wallet || !config.account!.address) {
     throw new Error("Cannot execute a trade without a connected wallet");
   }
 
-  const walletAddress = config.account.address;
+  const walletAddress = config.account!.address;
 
   // Check if the token transfer is approved
   console.debug(
@@ -95,20 +94,25 @@ export async function executeTrade(
     config.tokens.in,
     config.tokens.amountIn,
     walletAddress,
-    config.provider,
   );
 
   // If the token transfer is not approved, approve it
   if (!isApproved) {
-    const { txState: approval } = await getTokenTransferApproval(config);
+    const resp = await getTokenTransferApproval(config, wallet);
 
-    if (approval !== TransactionState.Sent) {
+    if (resp === TransactionState.Failed) {
       console.error("Token Approval Failed");
       return {
         txState: TransactionState.Failed,
         receipt: null,
       };
     }
+
+    // resp is the transaction hash, wait for the transaction to be mined
+    const receipt = await publicClient.waitForTransactionReceipt({
+      hash: resp as Hex,
+    });
+    console.debug("Approval Receipt", receipt);
   }
 
   const options: SwapOptions = {
@@ -122,17 +126,26 @@ export async function executeTrade(
   };
 
   const methodParameters = SwapRouter.swapCallParameters([trade], options);
+  console.debug("Method Parameters", methodParameters);
 
-  const tx = {
-    data: methodParameters.calldata,
+  const txHash = await wallet.sendTransaction({
+    account: config.account!.address,
+    chain: polygon,
+    data: methodParameters.calldata as Hex,
     to: SWAP_ROUTER_ADDRESS,
-    value: methodParameters.value,
+    value: BigInt(methodParameters.value),
     from: walletAddress,
-    maxFeePerGas: MAX_FEE_PER_GAS,
-    maxPriorityFeePerGas: MAX_PRIORITY_FEE_PER_GAS,
-  };
+    maxFeePerGas: BigInt(MAX_FEE_PER_GAS),
+    maxPriorityFeePerGas: BigInt(MAX_PRIORITY_FEE_PER_GAS),
+  });
 
-  return await sendTransaction(tx, config);
+  const receipt = await publicClient.waitForTransactionReceipt({
+    hash: txHash,
+  });
+  return {
+    txState: TransactionState.Sent,
+    receipt,
+  };
 }
 
 // Helper Quoting and Pool Functions
@@ -174,26 +187,23 @@ export async function checkTokenApproval(
   token: Token,
   amountIn: number,
   address: string,
-  provider: any,
 ): Promise<boolean> {
-  if (!provider || !address) {
-    console.error("No Provider Found");
+  if (!address) {
+    console.error("No address provided");
     return false;
   }
 
   try {
-    const tokenContract = new ethers.Contract(
-      token.address,
-      ERC20_ABI,
-      provider,
-    );
+    const allowance = await publicClient.readContract({
+      address: token.address,
+      abi: erc20Abi,
+      functionName: "allowance",
+      args: [address, SWAP_ROUTER_ADDRESS],
+    });
 
-    const allowance = await tokenContract.allowance(
-      address,
-      SWAP_ROUTER_ADDRESS,
-    );
+    const status =
+      allowance >= fromReadableAmount(amountIn, token.decimals).toBigInt();
 
-    const status = allowance.gte(fromReadableAmount(amountIn, token.decimals));
     console.debug("Allowance", allowance, status);
     return status;
   } catch (e) {
@@ -202,47 +212,34 @@ export async function checkTokenApproval(
   }
 }
 
-export async function getTokenTransferApproval(config: TradeConfig): Promise<{
-  txState: TransactionState;
-  receipt: ethers.providers.TransactionReceipt | null;
-}> {
-  const provider = config.provider;
-  const address = config.account.address;
-  if (!provider || !address) {
-    console.error("getTokenTransferApproval :: No Provider Found");
-    return {
-      txState: TransactionState.Failed,
-      receipt: null,
-    };
+export async function getTokenTransferApproval(
+  config: TradeConfig,
+  wallet: WalletClient | null,
+): Promise<string> {
+  const address = config.account!.address;
+  if (!address) {
+    console.error("No address provided");
+    return TransactionState.Failed;
   }
 
   try {
-    const tokenContract = new ethers.Contract(
-      config.tokens.in.address,
-      ERC20_ABI,
-      provider,
-    );
-
-    const transaction = await tokenContract.populateTransaction.approve(
-      SWAP_ROUTER_ADDRESS,
-      fromReadableAmount(
-        config.tokens.amountIn,
-        config.tokens.in.decimals,
-      ).toString(),
-    );
-
-    return sendTransaction(
-      {
-        ...transaction,
-        from: address,
-      },
-      config,
-    );
+    const hash = await wallet!.writeContract({
+      address: config.tokens.in.address,
+      abi: erc20Abi,
+      functionName: "approve",
+      account: config.account!.address,
+      chain: polygon,
+      args: [
+        SWAP_ROUTER_ADDRESS,
+        fromReadableAmount(
+          config.tokens.amountIn,
+          config.tokens.in.decimals,
+        ).toBigInt(),
+      ],
+    });
+    return hash;
   } catch (e) {
     console.error(e);
-    return {
-      txState: TransactionState.Failed,
-      receipt: null,
-    };
+    return TransactionState.Failed;
   }
 }

@@ -2,8 +2,8 @@ import { Token } from "@uniswap/sdk-core";
 import { FeeAmount } from "@uniswap/v3-sdk";
 
 import { USDC, SBC } from "@/lib/constants";
-import { ethers } from "ethers";
-
+import { PublicClient, WalletClient } from "viem";
+import { Account } from "thirdweb/wallets";
 export interface TradeConfig {
   rpc: {
     local: string;
@@ -16,12 +16,10 @@ export interface TradeConfig {
     out: Token;
     poolFee: number;
   };
-  provider: ethers.providers.JsonRpcProvider | null;
-  wallet: ethers.Signer | null;
-  account: any;
+  provider: PublicClient | null;
+  wallet: WalletClient | null;
+  account: Account | null;
 }
-
-// App Configuration - Defaults
 
 export const CurrentConfig: TradeConfig = {
   rpc: {

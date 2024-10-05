@@ -1,7 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
-import { ethers } from "ethers";
+import React, { useState, useEffect } from "react";
 
 import {
   ConnectButton,
@@ -9,15 +8,13 @@ import {
   useActiveWallet,
   useWalletBalance,
 } from "thirdweb/react";
-import { polygon } from "thirdweb/chains";
 import { createWallet } from "thirdweb/wallets";
-import { ethers5Adapter } from "thirdweb/adapters/ethers5";
+import { polygon as polygonChain } from "thirdweb/chains";
 
 import { getPoolData } from "@/lib/pool";
 import { USDC, SBC } from "@/lib/constants";
 import { createTrade, executeTrade } from "@/lib/trading";
 import { getPolygonScanUrl } from "@/lib/providers";
-import { sbcPoolContract } from "@/lib/pool";
 
 import { Header } from "@/components/Header";
 import DisconnectIcon from "@/components/DisconnectIcon";
@@ -28,11 +25,22 @@ import { ToastAction } from "@/components/ui/toast";
 import { useToast } from "@/hooks/use-toast";
 import { client } from "@/app/client";
 
+import { publicClient } from "@/lib/providers";
+import { polygon } from "viem/chains";
+
+import {
+  TransactionReceipt,
+  custom,
+  createWalletClient,
+  WalletClient,
+} from "viem";
+
 export default function Home() {
   const wallet = useActiveWallet();
   const account = useActiveAccount();
 
   const [isSwitched, setIsSwitched] = useState(false);
+  const [userWallet, setUserWallet] = useState<WalletClient | null>(null);
 
   const { toast } = useToast();
 
@@ -54,7 +62,7 @@ export default function Home() {
     isError: usdcIsError,
   } = useWalletBalance({
     address: wallet?.getAccount()?.address,
-    chain: polygon,
+    chain: polygonChain,
     client,
     tokenAddress: USDC.address,
   });
@@ -65,10 +73,18 @@ export default function Home() {
     isError: sbcIsError,
   } = useWalletBalance({
     address: wallet?.getAccount()?.address,
-    chain: polygon,
+    chain: polygonChain,
     client,
     tokenAddress: SBC.address,
   });
+
+  useEffect(() => {
+    const w = createWalletClient({
+      chain: polygon,
+      transport: custom((window as any).ethereum!),
+    });
+    setUserWallet(w);
+  }, [wallet]);
 
   return (
     <main className="px-4 pb-10 min-h-[100vh] flex items-center justify-center container max-w-screen-lg mx-auto">
@@ -143,9 +159,7 @@ export default function Home() {
               });
             }}
             className="px-4 py-2 bg-blue-600 text-white rounded disabled:cursor-not-allowed disabled:bg-blue-400"
-            disabled={
-              account === undefined || (window as any).ethereum === undefined
-            }
+            disabled={account === undefined}
           >
             Swap
           </button>
@@ -160,39 +174,36 @@ export default function Home() {
   }
 
   async function quoteUsdcToSbc(usdcAmount: string) {
-    const pool = await getPoolData(sbcPoolContract);
+    const pool = await getPoolData();
     return Number(usdcAmount) * Number(pool.token0Price.toSignificant());
   }
 
   async function quoteSbcToUsdc(sbcAmount: string) {
-    const pool = await getPoolData(sbcPoolContract);
+    const pool = await getPoolData();
     return Number(sbcAmount) * Number(pool.token1Price.toSignificant());
   }
 
-  async function doSwap(): Promise<ethers.providers.TransactionReceipt | null> {
+  async function doSwap(): Promise<TransactionReceipt | null> {
     const { usdcAmount, sbcAmount } = getTradeAmounts();
     if (!usdcAmount && !sbcAmount) {
       return null;
     }
-
+    if (!account) {
+      console.error("No account found");
+      return null;
+    }
     const config = CurrentConfig;
-    config.provider = ethers5Adapter.provider.toEthers({
-      chain: polygon,
-      client,
-    });
-    config.wallet = await ethers5Adapter.signer.toEthers({
-      chain: polygon,
-      client,
-      account: account!,
-    });
+
+    config.provider = publicClient;
     config.account = account;
+
     config.tokens.amountIn = isSwitched
       ? Number(sbcAmount)
       : Number(usdcAmount);
     config.tokens.in = isSwitched ? SBC : USDC;
     config.tokens.out = isSwitched ? USDC : SBC;
 
-    if (!config.account.address) {
+    if (!config.account!.address) {
       console.error("No wallet address found");
       return null;
     }
@@ -206,6 +217,7 @@ export default function Home() {
     const { receipt, txState: executedTradeStatus } = await executeTrade(
       trade,
       config,
+      userWallet!,
     );
 
     console.debug(
