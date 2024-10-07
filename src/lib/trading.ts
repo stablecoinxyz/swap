@@ -129,7 +129,7 @@ export async function executeTrade(
   console.debug("Method Parameters", methodParameters);
 
   const txHash = await wallet.sendTransaction({
-    account: config.account!.address,
+    account: config.account!.address as Hex,
     chain: polygon,
     data: methodParameters.calldata as Hex,
     to: SWAP_ROUTER_ADDRESS,
@@ -151,10 +151,7 @@ export async function executeTrade(
 // Helper Quoting and Pool Functions
 
 async function getOutputQuote(route: Route<Currency, Currency>) {
-  const provider = new ethers.providers.Web3Provider(
-    (window as any).ethereum,
-    "any",
-  );
+  const provider = new ethers.BrowserProvider((window as any).ethereum, "any");
 
   if (!provider) {
     throw new Error("Provider required to get pool state");
@@ -180,7 +177,10 @@ async function getOutputQuote(route: Route<Currency, Currency>) {
     data: calldata,
   });
 
-  return ethers.utils.defaultAbiCoder.decode(["uint256"], quoteCallReturnData);
+  return ethers.AbiCoder.defaultAbiCoder().decode(
+    ["uint256"],
+    quoteCallReturnData,
+  );
 }
 
 export async function checkTokenApproval(
@@ -195,14 +195,15 @@ export async function checkTokenApproval(
 
   try {
     const allowance = await publicClient.readContract({
-      address: token.address,
+      address: token.address as Hex,
       abi: erc20Abi,
       functionName: "allowance",
-      args: [address, SWAP_ROUTER_ADDRESS],
+      args: [address as Hex, SWAP_ROUTER_ADDRESS],
     });
 
     const status =
-      allowance >= fromReadableAmount(amountIn, token.decimals).toBigInt();
+      BigInt(allowance.toString()) >=
+      BigInt(fromReadableAmount(amountIn, token.decimals).toString());
 
     console.debug("Allowance", allowance, status);
     return status;
@@ -224,17 +225,19 @@ export async function getTokenTransferApproval(
 
   try {
     const hash = await wallet!.writeContract({
-      address: config.tokens.in.address,
+      address: config.tokens.in.address as Hex,
       abi: erc20Abi,
       functionName: "approve",
-      account: config.account!.address,
+      account: config.account!.address as Hex,
       chain: polygon,
       args: [
         SWAP_ROUTER_ADDRESS,
-        fromReadableAmount(
-          config.tokens.amountIn,
-          config.tokens.in.decimals,
-        ).toBigInt(),
+        BigInt(
+          fromReadableAmount(
+            config.tokens.amountIn,
+            config.tokens.in.decimals,
+          ).toString(),
+        ),
       ],
     });
     return hash;
