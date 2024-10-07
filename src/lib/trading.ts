@@ -2,6 +2,7 @@ import {
   Currency,
   CurrencyAmount,
   Percent,
+  SWAP_ROUTER_02_ADDRESSES,
   Token,
   TradeType,
 } from "@uniswap/sdk-core";
@@ -24,11 +25,29 @@ import {
   MAX_PRIORITY_FEE_PER_GAS,
 } from "@/lib/constants";
 import { getPoolData } from "@/lib/pool";
-import { TransactionState, publicClient } from "@/lib/providers";
+import {
+  TransactionState,
+  publicClient,
+  pimlicoClient,
+  pimlicoUrl,
+} from "@/lib/providers";
 import { fromReadableAmount } from "@/lib/extras";
 
-import { erc20Abi, Hex, TransactionReceipt, WalletClient } from "viem";
+import {
+  Account,
+  createWalletClient,
+  custom,
+  erc20Abi,
+  Hex,
+  http,
+  TransactionReceipt,
+  WalletClient,
+} from "viem";
 import { polygon } from "viem/chains";
+import { entryPoint07Address } from "viem/account-abstraction";
+
+import { toSimpleSmartAccount } from "permissionless/accounts";
+import { createSmartAccountClient } from "permissionless";
 
 export type TokenTrade = Trade<Token, Token, TradeType>;
 
@@ -181,6 +200,111 @@ async function getOutputQuote(route: Route<Currency, Currency>) {
     ["uint256"],
     quoteCallReturnData,
   );
+}
+
+export async function executeGaslessTrade(
+  trade: TokenTrade,
+  config: TradeConfig,
+  wallet: WalletClient,
+  // _account: Account,
+): Promise<{
+  txState: TransactionState;
+  userOpHash: string;
+}> {
+  if (!config.account!.address) {
+    throw new Error("Cannot execute a trade without a connected wallet");
+  }
+  const walletAddress = config.account!.address;
+
+  const owner = createWalletClient({
+    account: config.account!.address as Hex,
+    chain: polygon,
+    transport: custom((window as any).ethereum),
+  });
+
+  // create a new SimpleAccount instance
+  const simpleAccount = await toSimpleSmartAccount({
+    client: publicClient,
+    owner: owner,
+    entryPoint: {
+      address: entryPoint07Address,
+      version: "0.7",
+    },
+  });
+
+  // get the sender (counterfactual) address of the SimpleAccount
+  console.log("Sender Address", simpleAccount.address);
+
+  const smartAccountClient = createSmartAccountClient({
+    account: simpleAccount,
+    chain: polygon,
+    bundlerTransport: http(pimlicoUrl),
+    paymaster: pimlicoClient,
+    userOperation: {
+      estimateFeesPerGas: async () => {
+        return (await pimlicoClient.getUserOperationGasPrice()).fast;
+      },
+    },
+  });
+
+  // encode the approval transaction
+  const erc20ContractAbi = new ethers.Interface(erc20Abi);
+  const approveData = erc20ContractAbi.encodeFunctionData("approve", [
+    SWAP_ROUTER_ADDRESS,
+    fromReadableAmount(config.tokens.amountIn, config.tokens.in.decimals),
+  ]) as Hex;
+
+  // encode the swap transaction
+  const options: SwapOptions = {
+    // 50 bips, or 0.50%
+    slippageTolerance: new Percent(50, 10_000),
+
+    // 20 minutes from the current Unix time
+    deadline: Math.floor(Date.now() / 1000) + 60 * 20,
+
+    recipient: walletAddress,
+  };
+
+  const methodParameters = SwapRouter.swapCallParameters([trade], options);
+  const swapData = methodParameters.calldata as Hex;
+
+  // const callTo: Array<`0x${string}`> = [
+  //   config.tokens.in.address as Hex,
+  //   SWAP_ROUTER_ADDRESS,
+  // ];
+  // const callData: Array<`0x${string}`> = [approveData, swapData];
+
+  const userOpHash = await smartAccountClient.sendTransaction({
+    calls: [
+      {
+        to: config.tokens.in.address as Hex,
+        data: approveData,
+      },
+      {
+        to: SWAP_ROUTER_02_ADDRESSES(polygon.id) as Hex,
+        data: swapData,
+      },
+    ],
+  });
+
+  // // Check if the token transfer is approved
+  // console.debug(
+  //   `Checking token approval for ${config.tokens.in.symbol}; amount ${config.tokens.amountIn}; address: ${walletAddress}`,
+  // );
+  // const isApproved = await checkTokenApproval(
+  //   config.tokens.in,
+  //   config.tokens.amountIn,
+  //   sender, //walletAddress,
+  // );
+
+  // // If the token transfer is not approved, batch approval tx ahead of swap
+  // if (!isApproved) {
+  // }
+
+  return {
+    txState: TransactionState.Sent,
+    userOpHash,
+  };
 }
 
 export async function checkTokenApproval(

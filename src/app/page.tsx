@@ -13,7 +13,7 @@ import { polygon as polygonChain } from "thirdweb/chains";
 
 import { getPoolData } from "@/lib/pool";
 import { USDC, SBC } from "@/lib/constants";
-import { createTrade, executeTrade } from "@/lib/trading";
+import { createTrade, executeTrade, executeGaslessTrade } from "@/lib/trading";
 import { getPolygonScanUrl } from "@/lib/providers";
 
 import { Header } from "@/components/Header";
@@ -33,6 +33,7 @@ import {
   custom,
   createWalletClient,
   WalletClient,
+  Hex,
 } from "viem";
 
 export default function Home() {
@@ -41,20 +42,9 @@ export default function Home() {
 
   const [isSwitched, setIsSwitched] = useState(false);
   const [userWallet, setUserWallet] = useState<WalletClient | null>(null);
+  const [gasless, setGasless] = useState(true);
 
   const { toast } = useToast();
-
-  wallet?.subscribe("accountChanged", (account) => {
-    console.debug(`accountChanged: ${account}`);
-  });
-
-  wallet?.subscribe("chainChanged", (chain) => {
-    console.debug(`chainChanged: ${chain}`);
-  });
-
-  wallet?.subscribe("onConnect", (walletId) => {
-    console.debug(`onConnect: ${walletId}`);
-  });
 
   const {
     data: usdcBalance,
@@ -79,12 +69,18 @@ export default function Home() {
   });
 
   useEffect(() => {
+    if (!account || !window) {
+      return;
+    }
+
     const w = createWalletClient({
       chain: polygon,
+      account: account.address as Hex,
       transport: custom((window as any).ethereum!),
     });
     setUserWallet(w);
-  }, [wallet]);
+    // console.debug("Wallet client created", w);
+  }, [account]);
 
   return (
     <main className="px-4 pb-10 min-h-[100vh] flex items-center justify-center container max-w-screen-lg mx-auto">
@@ -140,7 +136,7 @@ export default function Home() {
                 },
               });
 
-              const receipt = await doSwap();
+              const receipt = await doSwap(gasless);
 
               resetTradeAmounts();
 
@@ -183,7 +179,9 @@ export default function Home() {
     return Number(sbcAmount) * Number(pool.token1Price.toSignificant());
   }
 
-  async function doSwap(): Promise<TransactionReceipt | null> {
+  async function doSwap(
+    gasless: boolean,
+  ): Promise<TransactionReceipt | { transactionHash: Hex } | null> {
     const { usdcAmount, sbcAmount } = getTradeAmounts();
     if (!usdcAmount && !sbcAmount) {
       return null;
@@ -214,17 +212,28 @@ export default function Home() {
       return null;
     }
 
-    const { receipt, txState: executedTradeStatus } = await executeTrade(
-      trade,
-      config,
-      userWallet!,
-    );
+    if (gasless) {
+      const { userOpHash, txState: status } = await executeGaslessTrade(
+        trade,
+        config,
+        userWallet!,
+      );
 
-    console.debug(
-      `Executed trade: ${executedTradeStatus}; Receipt: ${getPolygonScanUrl(receipt!.transactionHash)}`,
-    );
-
-    return receipt;
+      console.debug(
+        `Executed gasless trade: ${status}; Receipt: ${getPolygonScanUrl(userOpHash)}`,
+      );
+      return { transactionHash: userOpHash as Hex };
+    } else {
+      const { receipt, txState: status } = await executeTrade(
+        trade,
+        config,
+        userWallet!,
+      );
+      console.debug(
+        `Executed trade: ${status}; Receipt: ${getPolygonScanUrl(receipt!.transactionHash)}`,
+      );
+      return receipt;
+    }
   }
 
   function getTradeAmounts() {
