@@ -167,46 +167,10 @@ export async function executeTrade(
   };
 }
 
-// Helper Quoting and Pool Functions
-
-async function getOutputQuote(route: Route<Currency, Currency>) {
-  const provider = new ethers.BrowserProvider((window as any).ethereum, "any");
-
-  if (!provider) {
-    throw new Error("Provider required to get pool state");
-  }
-
-  const { calldata } = SwapQuoter.quoteCallParameters(
-    route,
-    CurrencyAmount.fromRawAmount(
-      CurrentConfig.tokens.in,
-      fromReadableAmount(
-        CurrentConfig.tokens.amountIn,
-        CurrentConfig.tokens.in.decimals,
-      ).toString(),
-    ),
-    TradeType.EXACT_INPUT,
-    {
-      useQuoterV2: true,
-    },
-  );
-
-  const quoteCallReturnData = await provider.call({
-    to: QUOTER_CONTRACT_ADDRESS,
-    data: calldata,
-  });
-
-  return ethers.AbiCoder.defaultAbiCoder().decode(
-    ["uint256"],
-    quoteCallReturnData,
-  );
-}
-
 export async function executeGaslessTrade(
   trade: TokenTrade,
   config: TradeConfig,
   wallet: WalletClient,
-  // _account: Account,
 ): Promise<{
   txState: TransactionState;
   userOpHash: string;
@@ -305,6 +269,41 @@ export async function executeGaslessTrade(
     txState: TransactionState.Sent,
     userOpHash,
   };
+}
+
+// Helper Quoting and Pool Functions
+
+async function getOutputQuote(route: Route<Currency, Currency>) {
+  const provider = new ethers.BrowserProvider((window as any).ethereum, "any");
+
+  if (!provider) {
+    throw new Error("Provider required to get pool state");
+  }
+
+  const { calldata } = SwapQuoter.quoteCallParameters(
+    route,
+    CurrencyAmount.fromRawAmount(
+      CurrentConfig.tokens.in,
+      fromReadableAmount(
+        CurrentConfig.tokens.amountIn,
+        CurrentConfig.tokens.in.decimals,
+      ).toString(),
+    ),
+    TradeType.EXACT_INPUT,
+    {
+      useQuoterV2: true,
+    },
+  );
+
+  const quoteCallReturnData = await provider.call({
+    to: QUOTER_CONTRACT_ADDRESS,
+    data: calldata,
+  });
+
+  return ethers.AbiCoder.defaultAbiCoder().decode(
+    ["uint256"],
+    quoteCallReturnData,
+  );
 }
 
 export async function checkTokenApproval(
