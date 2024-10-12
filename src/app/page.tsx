@@ -2,22 +2,21 @@
 
 import React, { useState, useEffect } from "react";
 
+import { ConnectKitButton } from "connectkit";
+
 import {
-  ConnectButton,
-  useActiveAccount,
-  useActiveWallet,
-  useWalletBalance,
-} from "thirdweb/react";
-import { createWallet } from "thirdweb/wallets";
-import { polygon as polygonChain } from "thirdweb/chains";
+  useAccount,
+  useBalance,
+  useWalletClient,
+  useWriteContract,
+} from "wagmi";
 
 import { getPoolData } from "@/lib/pool";
 import { USDC, SBC } from "@/lib/constants";
 import { createTrade, executeTrade, executeGaslessTrade } from "@/lib/trading";
-import { getPolygonScanUrl } from "@/lib/providers";
+import { getPolygonScanUrl, getBaseScanUrl } from "@/lib/providers";
 
 import { Header } from "@/components/Header";
-import DisconnectIcon from "@/components/DisconnectIcon";
 import SwitchIcon from "@/components/SwitchIcon";
 
 import { CurrentConfig } from "@/config";
@@ -26,7 +25,7 @@ import { useToast } from "@/hooks/use-toast";
 import { client } from "@/app/client";
 
 import { publicClient } from "@/lib/providers";
-import { polygon } from "viem/chains";
+import { polygon, base } from "viem/chains";
 
 import {
   TransactionReceipt,
@@ -37,50 +36,36 @@ import {
 } from "viem";
 
 export default function Home() {
-  const wallet = useActiveWallet();
-  const account = useActiveAccount();
+  const account = useAccount();
+  const { address, isConnected } = account;
+  const { data: wallet, isFetched } = useWalletClient();
+  if (isFetched && isConnected) {
+    CurrentConfig.wallet = wallet!;
+    CurrentConfig.account = account!;
+  }
 
   const [isSwitched, setIsSwitched] = useState(false);
-  const [userWallet, setUserWallet] = useState<WalletClient | null>(null);
   const [gasless, setGasless] = useState(true);
 
   const { toast } = useToast();
 
   const {
     data: usdcBalance,
-    isLoading: usdcIsLoading,
-    isError: usdcIsError,
-  } = useWalletBalance({
-    address: wallet?.getAccount()?.address,
-    chain: polygonChain,
-    client,
-    tokenAddress: USDC.address,
+    isLoading: isUsdcLoading,
+    isError: isUsdcError,
+  } = useBalance({
+    address,
+    token: USDC.address,
   });
 
   const {
     data: sbcBalance,
-    isLoading: sbcIsLoading,
-    isError: sbcIsError,
-  } = useWalletBalance({
-    address: wallet?.getAccount()?.address,
-    chain: polygonChain,
-    client,
-    tokenAddress: SBC.address,
+    isLoading: isSbcLoading,
+    isError: isSbcError,
+  } = useBalance({
+    address,
+    token: SBC.address,
   });
-
-  useEffect(() => {
-    if (!account || !window) {
-      return;
-    }
-
-    const w = createWalletClient({
-      chain: polygon,
-      account: account.address as Hex,
-      transport: custom((window as any).ethereum!),
-    });
-    setUserWallet(w);
-    // console.debug("Wallet client created", w);
-  }, [account]);
 
   return (
     <main className="px-4 pb-10 min-h-[100vh] flex items-center justify-center container max-w-screen-lg mx-auto">
@@ -89,24 +74,7 @@ export default function Home() {
 
         <div className="flex justify-center">
           <div className="flex flex-row -mt-12 mb-16">
-            <ConnectButton
-              client={client}
-              wallets={[createWallet("io.metamask")]}
-              appMetadata={{
-                name: "Stable Coin | Gasless Swap",
-                url: "https://stablecoin.xyz",
-              }}
-            />
-            {wallet && (
-              <button
-                onClick={() => wallet.disconnect()}
-                className="ml-2 px-2 py-2 bg-white-600 text-white rounded flex items-center justify-center"
-                style={{ height: "40px" }} // Adjust height to match ConnectButton
-                aria-label="Disconnect"
-              >
-                <DisconnectIcon />
-              </button>
-            )}
+            <ConnectKitButton />
           </div>
         </div>
 
@@ -132,7 +100,7 @@ export default function Home() {
                 description: `Please wait while we process your transaction...`,
                 duration: 9000,
                 onClick: () => {
-                  window.open(getPolygonScanUrl(receipt!.transactionHash));
+                  window.open(getBaseScanUrl(receipt!.transactionHash));
                 },
               });
 
@@ -143,19 +111,18 @@ export default function Home() {
               toast({
                 title: "Transaction Sent",
                 action: (
-                  <ToastAction altText="View on PolygonScan">
+                  <ToastAction altText="View on BaseScan">
                     View Status
                   </ToastAction>
                 ),
                 description: `🎉 Check your transaction status 👉🏻`,
                 duration: 9000,
                 onClick: () => {
-                  window.open(getPolygonScanUrl(receipt!.transactionHash));
+                  window.open(getBaseScanUrl(receipt!.transactionHash));
                 },
               });
             }}
             className="px-4 py-2 bg-blue-600 text-white rounded disabled:cursor-not-allowed disabled:bg-blue-400"
-            disabled={account === undefined}
           >
             Swap
           </button>
@@ -186,25 +153,18 @@ export default function Home() {
     if (!usdcAmount && !sbcAmount) {
       return null;
     }
-    if (!account) {
+    if (!address) {
       console.error("No account found");
       return null;
     }
     const config = CurrentConfig;
-
     config.provider = publicClient;
-    config.account = account;
 
     config.tokens.amountIn = isSwitched
       ? Number(sbcAmount)
       : Number(usdcAmount);
     config.tokens.in = isSwitched ? SBC : USDC;
     config.tokens.out = isSwitched ? USDC : SBC;
-
-    if (!config.account!.address) {
-      console.error("No wallet address found");
-      return null;
-    }
 
     const trade = await createTrade(config);
     if (!trade) {
@@ -216,21 +176,21 @@ export default function Home() {
       const { userOpHash, txState: status } = await executeGaslessTrade(
         trade,
         config,
-        userWallet!,
+        // CurrentConfig.wallet!,
       );
 
       console.debug(
-        `Executed gasless trade: ${status}; Receipt: ${getPolygonScanUrl(userOpHash)}`,
+        `Executed gasless trade: ${status}; Receipt: ${getBaseScanUrl(userOpHash)}`,
       );
       return { transactionHash: userOpHash as Hex };
     } else {
       const { receipt, txState: status } = await executeTrade(
         trade,
         config,
-        userWallet!,
+        CurrentConfig.wallet!,
       );
       console.debug(
-        `Executed trade: ${status}; Receipt: ${getPolygonScanUrl(receipt!.transactionHash)}`,
+        `Executed trade: ${status}; Receipt: ${getBaseScanUrl(receipt!.transactionHash)}`,
       );
       return receipt;
     }
@@ -284,7 +244,7 @@ export default function Home() {
                   ) as HTMLInputElement;
                   if (input) {
                     input.value = sbcBalance
-                      ? (Number(sbcBalance.displayValue) / 2).toFixed(3)
+                      ? (Number(sbcBalance.formatted) / 2).toFixed(3)
                       : "0";
                     // trigger onInput event to update usdc input
                     input.dispatchEvent(
@@ -306,7 +266,7 @@ export default function Home() {
                   ) as HTMLInputElement;
                   if (input) {
                     input.value = sbcBalance
-                      ? Number(sbcBalance.displayValue).toFixed(3)
+                      ? Number(sbcBalance.formatted).toFixed(3)
                       : "0";
                     // trigger onInput event to update usdc input
                     input.dispatchEvent(
@@ -325,9 +285,9 @@ export default function Home() {
 
           <span className="font-bold">
             Balance:{" "}
-            {sbcIsLoading
-              ? "Loading..."
-              : sbcBalance && Number(sbcBalance.displayValue).toFixed(3)}
+            {!isSbcLoading &&
+              sbcBalance &&
+              Number(sbcBalance.formatted).toFixed(3)}{" "}
           </span>
         </p>
         <input
@@ -367,7 +327,7 @@ export default function Home() {
                   ) as HTMLInputElement;
                   if (input) {
                     input.value = usdcBalance
-                      ? (Number(usdcBalance.displayValue) / 2).toFixed(3)
+                      ? (Number(usdcBalance.formatted) / 2).toFixed(3)
                       : "0";
                     // trigger onInput event to update sbc input
                     input.dispatchEvent(
@@ -389,7 +349,7 @@ export default function Home() {
                   ) as HTMLInputElement;
                   if (input) {
                     input.value = usdcBalance
-                      ? Number(usdcBalance.displayValue).toFixed(3)
+                      ? Number(usdcBalance.formatted).toFixed(3)
                       : "0";
                     // trigger onInput event to update sbc input
                     input.dispatchEvent(
@@ -408,9 +368,9 @@ export default function Home() {
 
           <span className="font-bold">
             Balance:{" "}
-            {usdcIsLoading
-              ? "Loading..."
-              : usdcBalance && Number(usdcBalance.displayValue).toFixed(3)}
+            {!isUsdcLoading &&
+              usdcBalance &&
+              Number(usdcBalance.formatted).toFixed(3)}
           </span>
         </p>
         <input
@@ -426,6 +386,7 @@ export default function Home() {
               "sbcInput",
             ) as HTMLInputElement;
             const sbcOut = await quoteUsdcToSbc(input.value);
+
             if (!isSwitched && sbcInput) {
               sbcInput.value = input.value ? sbcOut.toFixed(3) : "";
             }
