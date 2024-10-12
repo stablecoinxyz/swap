@@ -1,6 +1,6 @@
 {
   "name": "gasless-swap",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "author": "Stable Coin Inc.",
   "scripts": {
