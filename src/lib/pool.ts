@@ -6,8 +6,13 @@ import { getContract } from "viem";
 
 import { publicClient } from "@/lib/providers";
 
+// polygon
+// const USDC_SBC_UNISWAP_POOL_ADDRESS =
+//   "0x98A5a5D8D448A90C5378A07e30Da5148679b4C45";
+
+// base
 const USDC_SBC_UNISWAP_POOL_ADDRESS =
-  "0x98A5a5D8D448A90C5378A07e30Da5148679b4C45";
+  "0xBe432703851c43df6056b47cB55312696cf8Cd6c";
 
 export async function getPoolData(): Promise<Pool> {
   const poolContract = getContract({

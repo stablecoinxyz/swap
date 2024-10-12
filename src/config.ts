@@ -3,12 +3,13 @@ import { FeeAmount } from "@uniswap/v3-sdk";
 
 import { USDC, SBC } from "@/lib/constants";
 import { PublicClient, WalletClient } from "viem";
-import { Account } from "thirdweb/wallets";
+import { UseAccountReturnType } from "wagmi";
 export interface TradeConfig {
   rpc: {
     local: string;
     mainnet: string;
     polygon: string;
+    base: string;
   };
   tokens: {
     in: Token;
@@ -18,7 +19,7 @@ export interface TradeConfig {
   };
   provider: PublicClient | null;
   wallet: WalletClient | null;
-  account: Account | null;
+  account: UseAccountReturnType | null;
 }
 
 export const CurrentConfig: TradeConfig = {
@@ -26,6 +27,7 @@ export const CurrentConfig: TradeConfig = {
     local: "http://localhost:8545",
     mainnet: "",
     polygon: "https://polygon-rpc.com",
+    base: "https://base-rpc.publicnode.com", //https://base.llamarpc.com",
   },
   tokens: {
     in: USDC,
