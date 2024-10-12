@@ -2,6 +2,7 @@ import {
   Currency,
   CurrencyAmount,
   Percent,
+  QUOTER_ADDRESSES,
   SWAP_ROUTER_02_ADDRESSES,
   Token,
   TradeType,
@@ -17,26 +18,21 @@ import {
 import { ethers } from "ethers";
 import JSBI from "jsbi";
 
-import { abi as swapRouterAbi } from "@uniswap/v3-periphery/artifacts/contracts/interfaces/ISwapRouter.sol/ISwapRouter.json";
-import { abi as swapRouter2Abi } from "@uniswap/swap-router-contracts/artifacts/contracts/V3SwapRouter.sol/V3SwapRouter.json";
-import { abi as erc20PermitAbi } from "@openzeppelin/contracts/build/contracts/IERC20Permit.json";
+import swapRouterAbi from "@/lib/abi/swapRouter.abi";
+import swapRouter2Abi from "@/lib/abi/swapRouter2.abi";
+import erc20PermitAbi from "@/lib/abi/erc20Permit.abi";
 // import { abi as quoterAbi } from "@uniswap/v3-periphery/artifacts/contracts/interfaces/IQuoter.sol/IQuoter.json";
 
 import { CurrentConfig, TradeConfig } from "@/config";
-import {
-  QUOTER_CONTRACT_ADDRESS,
-  MAX_FEE_PER_GAS,
-  MAX_PRIORITY_FEE_PER_GAS,
-} from "@/lib/constants";
+import { MAX_FEE_PER_GAS, MAX_PRIORITY_FEE_PER_GAS } from "@/lib/constants";
 import { getPoolData } from "@/lib/pool";
 import {
   TransactionState,
   publicClient,
   pimlicoClient,
-  pimlicoUrl,
+  pimlicoUrlForChain,
 } from "@/lib/providers";
 import { fromReadableAmount } from "@/lib/extras";
-import { getPolygonScanUrl, getBaseScanUrl } from "@/lib/providers";
 
 import {
   Account,
@@ -85,7 +81,7 @@ export async function createTrade(
 
   const swapRoute = new Route([pool], inToken, outToken);
 
-  const amountOut = await getOutputQuote(swapRoute, config);
+  const amountOut = await getOutputQuote(swapRoute);
 
   const uncheckedTrade = Trade.createUncheckedTrade({
     route: swapRoute,
@@ -117,7 +113,6 @@ export async function executeTrade(
 
   const walletAddress = config.account!.address;
 
-  // Check if the token transfer is approved
   console.debug(
     `Checking token approval for ${config.tokens.in.symbol}; amount ${config.tokens.amountIn}; address: ${walletAddress}`,
   );
@@ -163,7 +158,7 @@ export async function executeTrade(
     account: config.account!.address as Hex,
     chain: base, // polygon,
     data: methodParameters.calldata as Hex,
-    to: SWAP_ROUTER_02_ADDRESSES(base.id), //polygon.id),
+    to: SWAP_ROUTER_02_ADDRESSES(base.id) as Hex, //polygon.id),
     value: BigInt(methodParameters.value),
     from: walletAddress,
     maxFeePerGas: BigInt(MAX_FEE_PER_GAS),
@@ -223,7 +218,7 @@ export async function executeGaslessTrade(
   const smartAccountClient = createSmartAccountClient({
     account: simpleAccount,
     chain: base, // polygon,
-    bundlerTransport: http(pimlicoUrl),
+    bundlerTransport: http(pimlicoUrlForChain(base)),
     paymaster: pimlicoClient,
     userOperation: {
       estimateFeesPerGas: async () => {
@@ -239,7 +234,6 @@ export async function executeGaslessTrade(
     senderAddress,
     amountIn,
   ]) as Hex;
-
   // encode the approval transaction
   const approveData = erc20ContractAbi.encodeFunctionData("approve", [
     SWAP_ROUTER_02_ADDRESSES(base.id), //polygon.id),
@@ -257,24 +251,28 @@ export async function executeGaslessTrade(
   };
 
   const methodParameters = SwapRouter.swapCallParameters([trade], options);
-  const swapData_ = methodParameters.calldata as Hex;
 
+  // HACK: args should be all elements in args_ except for `deadline`, thus exclude it
+  // @dev: this is a really bizzare way to do this, but it works for now. Note that we're
+  // using swapRouterAbi to decode the function data, but swapRouter2Abi to encode it without
+  // the `deadline` argument. It doesn't seem to work any other way if we're using the
+  // Uniswap SDK as-is.
+  const swapData_ = methodParameters.calldata as Hex;
   const { functionName, args } = decodeFunctionData({
     abi: swapRouterAbi,
     data: swapData_,
   });
 
-  // HACK: args should be all elements in args_ except for `deadline`, thus exclude it
   delete (args as any)[0]["deadline"];
 
+  // re-encode the swap transaction without the `deadline` argument
   const swapData = encodeFunctionData({
     abi: swapRouter2Abi,
     functionName,
     args,
   });
 
-  console.debug(`methodParameters`, methodParameters);
-
+  // package the calls together in the correct order
   const calls = [
     {
       to: config.tokens.in.address as Hex,
@@ -290,19 +288,19 @@ export async function executeGaslessTrade(
     },
   ];
 
-  // Check if the token transfer is approved for the sender
   console.debug(
     `Checking token approval for ${config.tokens.in.symbol}; amount ${config.tokens.amountIn}; sender address: ${senderAddress}`,
   );
+
   const isApproved = await checkTokenApproval(
     config.tokens.in,
     config.tokens.amountIn,
     senderAddress,
   );
 
-  // If the token transfer is not approved, prepend the permit data
+  // If the token transfer is not approved, prepend the permit data instruction
   if (!isApproved) {
-    // get eoa signature to permit the SimpleAccount to spend the amountIn
+    // get EOA signature to permit the SimpleAccount to spend the amountIn
     const signature = await getPermitSignature(
       owner,
       config.tokens.in,
@@ -311,10 +309,10 @@ export async function executeGaslessTrade(
       amountIn,
       deadline,
     );
-    const { r, s, yParity, v } = parseSignature(signature);
-    console.debug("Signature", signature);
-    console.debug({ yParity, v, r, s });
 
+    const { r, s, v } = parseSignature(signature);
+
+    // encode the permit transaction calldata
     const erc20PermitContractAbi = new ethers.Interface(erc20PermitAbi);
     const permitData = erc20PermitContractAbi.encodeFunctionData("permit", [
       walletAddress,
@@ -326,21 +324,15 @@ export async function executeGaslessTrade(
       s,
     ]) as Hex;
 
-    // // run the permit function on the ERC20 token to get EOA signature
-    // const permitTxHash = await owner.writeContract({
-    //   address: config.tokens.in.address as Hex,
-    //   abi: erc20PermitAbi,
-    //   functionName: "permit",
-    //   args: [walletAddress, senderAddress, amountIn, deadline, v, r, s],
-    // });
-    // console.debug("Permit Tx URL", getBaseScanUrl(permitTxHash)); // getPolygonScanUrl(permitTxHash));
-
+    // prepend to the calls array
     calls.unshift({
       to: config.tokens.in.address as Hex,
       data: permitData,
     });
   }
 
+  // send the batch call transaction to the SimpleAccount,
+  // with the paymaster context set to the base gas credits policy
   const userOpHash = await smartAccountClient.sendTransaction({
     calls,
     paymasterContext: {
@@ -356,11 +348,8 @@ export async function executeGaslessTrade(
 
 // Helper Quoting and Pool Functions
 
-async function getOutputQuote(
-  route: Route<Currency, Currency>,
-  config: TradeConfig,
-) {
-  const provider = publicClient; //config.provider; //new ethers.BrowserProvider((window as any).ethereum, "any");
+async function getOutputQuote(route: Route<Currency, Currency>) {
+  const provider = publicClient;
 
   if (!provider) {
     throw new Error("Provider required to get pool state");
@@ -382,7 +371,7 @@ async function getOutputQuote(
   );
 
   const { data: quoteCallReturnData } = await provider.call({
-    to: QUOTER_CONTRACT_ADDRESS,
+    to: QUOTER_ADDRESSES[base.id] as Hex, //polygon.id),
     data: calldata as Hex,
   });
 
@@ -407,7 +396,7 @@ async function checkTokenApproval(
       address: token.address as Hex,
       abi: erc20Abi,
       functionName: "allowance",
-      args: [address as Hex, SWAP_ROUTER_02_ADDRESSES(base.id)],
+      args: [address as Hex, SWAP_ROUTER_02_ADDRESSES(base.id) as Hex],
     });
 
     const status =
@@ -424,7 +413,7 @@ async function checkTokenApproval(
 
 async function getTokenTransferApproval(
   config: TradeConfig,
-  wallet: WalletClient | null,
+  wallet: WalletClient,
 ): Promise<string> {
   const address = config.account!.address;
   if (!address) {
@@ -433,14 +422,14 @@ async function getTokenTransferApproval(
   }
 
   try {
-    const hash = await wallet!.writeContract({
+    const hash = await wallet.writeContract({
       address: config.tokens.in.address as Hex,
       abi: erc20Abi,
       functionName: "approve",
       account: config.account!.address as Hex,
       chain: base, // polygon,
       args: [
-        SWAP_ROUTER_02_ADDRESSES(base.id), //polygon.id),
+        SWAP_ROUTER_02_ADDRESSES(base.id) as Hex, //polygon.id),
         BigInt(
           fromReadableAmount(
             config.tokens.amountIn,
@@ -465,12 +454,11 @@ async function getPermitSignature(
   deadline: number,
 ): Promise<Hex> {
   try {
-    console.debug("wallet is", wallet.account!.address);
     const domain = {
       name: token.name!,
-      version: "1",
+      version: "2",
       chainId: base.id, // polygon.id,
-      verifyingContract: token.address,
+      verifyingContract: token.address as Hex,
     };
     console.debug("Domain", domain);
     const types = {

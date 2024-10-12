@@ -1,23 +1,24 @@
-import IUniswapV3PoolABI from "@uniswap/v3-core/artifacts/contracts/interfaces/IUniswapV3Pool.sol/IUniswapV3Pool.json";
-import { FeeAmount, Pool } from "@uniswap/v3-sdk";
+import { computePoolAddress, FeeAmount, Pool } from "@uniswap/v3-sdk";
+import { V3_CORE_FACTORY_ADDRESSES } from "@uniswap/sdk-core";
+
+import { getContract, Hex } from "viem";
+import { base } from "viem/chains";
 
 import { USDC, SBC } from "@/lib/constants";
-import { getContract } from "viem";
-
 import { publicClient } from "@/lib/providers";
-
-// polygon
-// const USDC_SBC_UNISWAP_POOL_ADDRESS =
-//   "0x98A5a5D8D448A90C5378A07e30Da5148679b4C45";
-
-// base
-const USDC_SBC_UNISWAP_POOL_ADDRESS =
-  "0xBe432703851c43df6056b47cB55312696cf8Cd6c";
+import uniswapV3PoolAbi from "@/lib/abi/uniswapV3Pool.abi";
 
 export async function getPoolData(): Promise<Pool> {
+  const address = computePoolAddress({
+    factoryAddress: V3_CORE_FACTORY_ADDRESSES[base.id],
+    fee: FeeAmount.LOWEST,
+    tokenA: USDC,
+    tokenB: SBC,
+  }) as Hex;
+
   const poolContract = getContract({
-    address: USDC_SBC_UNISWAP_POOL_ADDRESS,
-    abi: IUniswapV3PoolABI.abi,
+    address,
+    abi: uniswapV3PoolAbi,
     client: publicClient,
   });
 
