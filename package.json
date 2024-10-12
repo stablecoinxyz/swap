@@ -1,6 +1,6 @@
 {
   "name": "gasless-swap",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "author": "Stable Coin Inc.",
   "scripts": {
@@ -11,14 +11,19 @@
     "format": "prettier --write \"**/*.{(j|t)s,(j|t)sx,json,md}\""
   },
   "dependencies": {
+    "@openzeppelin/contracts": "^5.0.2",
     "@radix-ui/react-icons": "^1.3.0",
+    "@radix-ui/react-label": "^2.1.0",
+    "@radix-ui/react-switch": "^1.1.1",
     "@radix-ui/react-toast": "^1.2.2",
+    "@tanstack/react-query": "^5.59.0",
     "@uniswap/sdk-core": "^5.4.0",
-    "@uniswap/v3-periphery": "^1.4.4",
+    "@uniswap/v3-periphery": "1.4.4",
     "@uniswap/v3-sdk": "^3.14.0",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",
-    "ethers": "^5.7.2",
+    "connectkit": "^1.8.2",
+    "ethers": "^6",
     "jsbi": "3.2.5",
     "lucide-react": "^0.447.0",
     "next": "14.1.0",
@@ -28,7 +33,8 @@
     "tailwind-merge": "^2.5.2",
     "tailwindcss-animate": "^1.0.7",
     "thirdweb": "^5",
-    "viem": "^2.21.18"
+    "viem": "^2.21.18",
+    "wagmi": "^2.12.17"
   },
   "devDependencies": {
     "@types/node": "^20",

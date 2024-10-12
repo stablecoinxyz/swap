@@ -2,115 +2,90 @@
 
 import React, { useState, useEffect } from "react";
 
-import {
-  ConnectButton,
-  useActiveAccount,
-  useActiveWallet,
-  useWalletBalance,
-} from "thirdweb/react";
-import { createWallet } from "thirdweb/wallets";
-import { polygon as polygonChain } from "thirdweb/chains";
+import { ConnectKitButton } from "connectkit";
+
+import { useAccount, useBalance, useWalletClient } from "wagmi";
 
 import { getPoolData } from "@/lib/pool";
 import { USDC, SBC } from "@/lib/constants";
-import { createTrade, executeTrade } from "@/lib/trading";
-import { getPolygonScanUrl } from "@/lib/providers";
-
+import { createTrade, executeTrade, executeGaslessTrade } from "@/lib/trading";
+import { getScannerUrl } from "@/lib/providers";
 import { Header } from "@/components/Header";
-import DisconnectIcon from "@/components/DisconnectIcon";
 import SwitchIcon from "@/components/SwitchIcon";
-
 import { CurrentConfig } from "@/config";
 import { ToastAction } from "@/components/ui/toast";
 import { useToast } from "@/hooks/use-toast";
-import { client } from "@/app/client";
-
 import { publicClient } from "@/lib/providers";
-import { polygon } from "viem/chains";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 
-import {
-  TransactionReceipt,
-  custom,
-  createWalletClient,
-  WalletClient,
-} from "viem";
+import { TransactionReceipt, Hex } from "viem";
+import { polygon, base } from "viem/chains";
 
 export default function Home() {
-  const wallet = useActiveWallet();
-  const account = useActiveAccount();
+  const account = useAccount();
+  const { address, isConnected } = account;
+  const { data: wallet, isFetched } = useWalletClient();
+  if (isFetched && isConnected) {
+    CurrentConfig.wallet = wallet!;
+    CurrentConfig.account = account!;
+  }
 
   const [isSwitched, setIsSwitched] = useState(false);
-  const [userWallet, setUserWallet] = useState<WalletClient | null>(null);
+  const [gasless, setGasless] = useState(true);
 
   const { toast } = useToast();
 
-  wallet?.subscribe("accountChanged", (account) => {
-    console.debug(`accountChanged: ${account}`);
-  });
-
-  wallet?.subscribe("chainChanged", (chain) => {
-    console.debug(`chainChanged: ${chain}`);
-  });
-
-  wallet?.subscribe("onConnect", (walletId) => {
-    console.debug(`onConnect: ${walletId}`);
-  });
-
   const {
     data: usdcBalance,
-    isLoading: usdcIsLoading,
-    isError: usdcIsError,
-  } = useWalletBalance({
-    address: wallet?.getAccount()?.address,
-    chain: polygonChain,
-    client,
-    tokenAddress: USDC.address,
+    isLoading: isUsdcLoading,
+    isError: isUsdcError,
+  } = useBalance({
+    address,
+    token: USDC.address as Hex,
   });
 
   const {
     data: sbcBalance,
-    isLoading: sbcIsLoading,
-    isError: sbcIsError,
-  } = useWalletBalance({
-    address: wallet?.getAccount()?.address,
-    chain: polygonChain,
-    client,
-    tokenAddress: SBC.address,
+    isLoading: isSbcLoading,
+    isError: isSbcError,
+  } = useBalance({
+    address,
+    token: SBC.address as Hex,
   });
 
   useEffect(() => {
-    const w = createWalletClient({
-      chain: polygon,
-      transport: custom((window as any).ethereum!),
-    });
-    setUserWallet(w);
-  }, [wallet]);
-
+    // add class for light mode
+    if (!gasless) {
+      document.documentElement.classList.remove("dark");
+      document.documentElement.classList.add("theme");
+    } else {
+      document.documentElement.classList.add("dark");
+      document.documentElement.classList.remove("theme");
+    }
+  }, [gasless]);
   return (
     <main className="px-4 pb-10 min-h-[100vh] flex items-center justify-center container max-w-screen-lg mx-auto">
-      <div className="py-14">
+      <div className="py-8">
         <Header />
 
         <div className="flex justify-center">
-          <div className="flex flex-row -mt-12 mb-16">
-            <ConnectButton
-              client={client}
-              wallets={[createWallet("io.metamask")]}
-              appMetadata={{
-                name: "Stable Coin | Gasless Swap",
-                url: "https://stablecoin.xyz",
-              }}
-            />
-            {wallet && (
-              <button
-                onClick={() => wallet.disconnect()}
-                className="ml-2 px-2 py-2 bg-white-600 text-white rounded flex items-center justify-center"
-                style={{ height: "40px" }} // Adjust height to match ConnectButton
-                aria-label="Disconnect"
+          <div className="flex flex-col -mt-8 mb-16 space-y-4">
+            <ConnectKitButton />
+            <div className="flex flex-row space-x-2 justify-center content-center ">
+              <Switch
+                className="flex border-zinc-400"
+                id="gasless-switch"
+                checked={gasless}
+                onCheckedChange={() => setGasless(!gasless)}
+              />
+              <Label
+                htmlFor="gasless-switch"
+                className="flex dark:bg-zinc-950 text-zinc-950 dark:text-neutral-100 pt-0.5 text-xs"
               >
-                <DisconnectIcon />
-              </button>
-            )}
+                <p>Gasless: {gasless ? "ON" : "OFF"}</p>
+              </Label>
+            </div>
           </div>
         </div>
 
@@ -131,35 +106,44 @@ export default function Home() {
         <div className="flex justify-center mt-8">
           <button
             onClick={async () => {
+              const { usdcAmount, sbcAmount } = getTradeAmounts();
+              if (!usdcAmount && !sbcAmount) {
+                console.log("No amount entered");
+                return;
+              }
+              if (!address) {
+                console.error("No account found");
+                return;
+              }
               toast({
                 title: "Performing Swap",
                 description: `Please wait while we process your transaction...`,
                 duration: 9000,
                 onClick: () => {
-                  window.open(getPolygonScanUrl(receipt!.transactionHash));
+                  window.open(getScannerUrl(base.id, receipt!.transactionHash));
                 },
               });
 
-              const receipt = await doSwap();
+              const receipt = await doSwap(gasless);
 
               resetTradeAmounts();
 
               toast({
                 title: "Transaction Sent",
                 action: (
-                  <ToastAction altText="View on PolygonScan">
+                  <ToastAction altText="View on BaseScan">
                     View Status
                   </ToastAction>
                 ),
                 description: `🎉 Check your transaction status 👉🏻`,
                 duration: 9000,
                 onClick: () => {
-                  window.open(getPolygonScanUrl(receipt!.transactionHash));
+                  window.open(getScannerUrl(base.id, receipt!.transactionHash));
                 },
               });
             }}
-            className="px-4 py-2 bg-blue-600 text-white rounded disabled:cursor-not-allowed disabled:bg-blue-400"
-            disabled={account === undefined}
+            className="px-4 py-2  dark:bg-white bg-zinc-950 dark:text-zinc-950 text-neutral-100 rounded hover:font-extrabold disabled:font-normal disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={!isFetched || !isConnected}
           >
             Swap
           </button>
@@ -183,19 +167,20 @@ export default function Home() {
     return Number(sbcAmount) * Number(pool.token1Price.toSignificant());
   }
 
-  async function doSwap(): Promise<TransactionReceipt | null> {
+  async function doSwap(
+    gasless: boolean,
+  ): Promise<TransactionReceipt | { transactionHash: Hex } | null> {
     const { usdcAmount, sbcAmount } = getTradeAmounts();
     if (!usdcAmount && !sbcAmount) {
+      console.log("No amount entered");
       return null;
     }
-    if (!account) {
+    if (!address) {
       console.error("No account found");
       return null;
     }
     const config = CurrentConfig;
-
     config.provider = publicClient;
-    config.account = account;
 
     config.tokens.amountIn = isSwitched
       ? Number(sbcAmount)
@@ -203,28 +188,38 @@ export default function Home() {
     config.tokens.in = isSwitched ? SBC : USDC;
     config.tokens.out = isSwitched ? USDC : SBC;
 
-    if (!config.account!.address) {
-      console.error("No wallet address found");
-      return null;
-    }
-
     const trade = await createTrade(config);
     if (!trade) {
       console.error("No trade created");
       return null;
     }
 
-    const { receipt, txState: executedTradeStatus } = await executeTrade(
-      trade,
-      config,
-      userWallet!,
-    );
+    let response;
+    if (gasless) {
+      const { userOpHash, txState: status } = await executeGaslessTrade(
+        trade,
+        config,
+      );
 
-    console.debug(
-      `Executed trade: ${executedTradeStatus}; Receipt: ${getPolygonScanUrl(receipt!.transactionHash)}`,
-    );
+      console.debug(
+        `Executed gasless trade: ${status}; Receipt: ${getScannerUrl(base.id, userOpHash)}`,
+      );
 
-    return receipt;
+      response = { transactionHash: userOpHash as Hex };
+    } else {
+      const { receipt, txState: status } = await executeTrade(
+        trade,
+        config,
+        CurrentConfig.wallet!,
+      );
+
+      console.debug(
+        `Executed trade: ${status}; Receipt: ${getScannerUrl(base.id, receipt!.transactionHash)}`,
+      );
+
+      response = { transactionHash: receipt!.transactionHash };
+    }
+    return response;
   }
 
   function getTradeAmounts() {
@@ -251,7 +246,7 @@ export default function Home() {
       <div className="flex justify-center my-4">
         <button
           onClick={handleSwitch}
-          className="px-2 py-2 bg-white-600 text-white rounded flex items-center justify-center"
+          className="px-2 py-2  rounded flex items-center justify-center"
           aria-label="Switch"
         >
           <SwitchIcon />
@@ -262,20 +257,20 @@ export default function Home() {
 
   function SbcContainer() {
     return (
-      <div className="flex flex-col border border-zinc-800 p-4 rounded-lg w-full relative">
+      <div className="flex flex-col border border-zinc-800 text-zinc-950 bg-zinc-50 p-4 rounded-lg w-full relative">
         <h2 className="text-lg font-semibold mb-2">SBC</h2>
-        <p className="text-sm text-zinc-400 absolute top-4 right-4">
+        <p className="text-sm absolute top-4 right-4">
           {isSwitched && (
             <>
               <button
-                className="text-sm text-zinc-400 hover:text-zinc-200 mr-2"
+                className="text-sm mr-2"
                 onClick={() => {
                   const input = document.getElementById(
                     "sbcInput",
                   ) as HTMLInputElement;
                   if (input) {
                     input.value = sbcBalance
-                      ? (Number(sbcBalance.displayValue) / 2).toFixed(3)
+                      ? (Number(sbcBalance.formatted) / 2).toFixed(3)
                       : "0";
                     // trigger onInput event to update usdc input
                     input.dispatchEvent(
@@ -290,14 +285,14 @@ export default function Home() {
                 [50%]
               </button>
               <button
-                className="text-sm text-zinc-400 hover:text-zinc-200 mr-8"
+                className="text-sm mr-8"
                 onClick={() => {
                   const input = document.getElementById(
                     "sbcInput",
                   ) as HTMLInputElement;
                   if (input) {
                     input.value = sbcBalance
-                      ? Number(sbcBalance.displayValue).toFixed(3)
+                      ? Number(sbcBalance.formatted).toFixed(3)
                       : "0";
                     // trigger onInput event to update usdc input
                     input.dispatchEvent(
@@ -316,19 +311,45 @@ export default function Home() {
 
           <span className="font-bold">
             Balance:{" "}
-            {sbcIsLoading
-              ? "Loading..."
-              : sbcBalance && Number(sbcBalance.displayValue).toFixed(3)}
+            {!isSbcLoading &&
+              sbcBalance &&
+              Number(sbcBalance.formatted).toFixed(3)}{" "}
           </span>
         </p>
         <input
           id="sbcInput"
           type="text"
-          className="mt-auto p-2 text-lg border border-zinc-600 font-extrabold text-zinc-600 rounded w-full text-right"
+          className="mt-auto p-2 text-lg border border-zinc-600 text-zinc-950 bg-zinc-50 font-extrabold rounded w-full text-right"
           placeholder="Enter amount"
           onInput={async (e) => {
             const input = e.target as HTMLInputElement;
             input.value = input.value.replace(/[^0-9.]/g, "");
+            // update usdc input with converted value based on current conversionRate
+            const usdcInput = document.getElementById(
+              "usdcInput",
+            ) as HTMLInputElement;
+            const usdcOut = await quoteSbcToUsdc(input.value);
+            if (isSwitched && usdcInput) {
+              usdcInput.value = input.value ? usdcOut.toFixed(3) : "";
+            }
+          }}
+          onBlur={async (e) => {
+            // set the input to the max value if it exceeds the balance
+            const input = e.target as HTMLInputElement;
+            const value = Number(input.value);
+
+            const balance = sbcBalance ? Number(sbcBalance.formatted) : 0;
+            if (value > balance) {
+              input.value = balance.toFixed(3);
+              // trigger onInput event to update usdc input
+              input.dispatchEvent(
+                new Event("input", {
+                  bubbles: true,
+                  cancelable: true,
+                }),
+              );
+            }
+
             // update usdc input with converted value based on current conversionRate
             const usdcInput = document.getElementById(
               "usdcInput",
@@ -345,20 +366,20 @@ export default function Home() {
 
   function UsdcContainer() {
     return (
-      <div className="flex flex-col border border-zinc-800 p-4 rounded-lg w-full relative">
+      <div className="flex flex-col border border-zinc-800 text-zinc-950 bg-zinc-50 p-4 rounded-lg w-full relative">
         <h2 className="text-lg font-semibold mb-2">USDC</h2>
-        <p className="text-sm text-zinc-400 absolute top-4 right-4">
+        <p className="text-sm  absolute top-4 right-4">
           {!isSwitched && (
             <>
               <button
-                className="text-sm text-zinc-400 hover:text-zinc-200 mr-2"
+                className="text-sm mr-2"
                 onClick={() => {
                   const input = document.getElementById(
                     "usdcInput",
                   ) as HTMLInputElement;
                   if (input) {
                     input.value = usdcBalance
-                      ? (Number(usdcBalance.displayValue) / 2).toFixed(3)
+                      ? (Number(usdcBalance.formatted) / 2).toFixed(3)
                       : "0";
                     // trigger onInput event to update sbc input
                     input.dispatchEvent(
@@ -373,14 +394,14 @@ export default function Home() {
                 [50%]
               </button>
               <button
-                className="text-sm text-zinc-400 hover:text-zinc-200 mr-8"
+                className="text-sm mr-8"
                 onClick={() => {
                   const input = document.getElementById(
                     "usdcInput",
                   ) as HTMLInputElement;
                   if (input) {
                     input.value = usdcBalance
-                      ? Number(usdcBalance.displayValue).toFixed(3)
+                      ? Number(usdcBalance.formatted).toFixed(3)
                       : "0";
                     // trigger onInput event to update sbc input
                     input.dispatchEvent(
@@ -399,20 +420,47 @@ export default function Home() {
 
           <span className="font-bold">
             Balance:{" "}
-            {usdcIsLoading
-              ? "Loading..."
-              : usdcBalance && Number(usdcBalance.displayValue).toFixed(3)}
+            {!isUsdcLoading &&
+              usdcBalance &&
+              Number(usdcBalance.formatted).toFixed(3)}
           </span>
         </p>
         <input
           id="usdcInput"
           type="text"
-          className="mt-auto p-2 text-lg border border-zinc-600 font-extrabold text-zinc-600 rounded w-full text-right"
+          className="mt-auto p-2 text-lg border border-zinc-600 text-zinc-950 bg-zinc-50 font-extrabold rounded w-full text-right"
           placeholder="Enter amount"
           onInput={async (e) => {
             const input = e.target as HTMLInputElement;
             input.value = input.value.replace(/[^0-9.]/g, "");
 
+            const sbcInput = document.getElementById(
+              "sbcInput",
+            ) as HTMLInputElement;
+            const sbcOut = await quoteUsdcToSbc(input.value);
+
+            if (!isSwitched && sbcInput) {
+              sbcInput.value = input.value ? sbcOut.toFixed(3) : "";
+            }
+          }}
+          onBlur={async (e) => {
+            // set the input to the max value if it exceeds the balance
+            const input = e.target as HTMLInputElement;
+            const value = Number(input.value);
+
+            const balance = usdcBalance ? Number(usdcBalance.formatted) : 0;
+            if (value > balance) {
+              input.value = balance.toFixed(3);
+              // trigger onInput event to update sbc input
+              input.dispatchEvent(
+                new Event("input", {
+                  bubbles: true,
+                  cancelable: true,
+                }),
+              );
+            }
+
+            // update sbc input with converted value based on current conversionRate
             const sbcInput = document.getElementById(
               "sbcInput",
             ) as HTMLInputElement;
