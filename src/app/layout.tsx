@@ -20,7 +20,7 @@ export default function RootLayout({
     <html lang="en">
       <body className={inter.className}>
         <Web3Provider>
-          <div className="bg-zinc-300 dark:bg-zinc-950 text-zinc-950 dark:text-neutral-100 ">
+          <div className="bg-violet-100 dark:bg-zinc-950 text-zinc-950 dark:text-neutral-100 ">
             {children}
           </div>
         </Web3Provider>

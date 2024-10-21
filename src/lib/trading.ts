@@ -154,6 +154,8 @@ export async function executeTrade(
   const methodParameters = SwapRouter.swapCallParameters([trade], options);
   console.debug("Method Parameters", methodParameters);
 
+  // DEV: this will fail on Base as Uniswap did not deploy SwapRouter contract on Base
+  // FIX: if time permits, switch over the implementation to use UniversalRouter instead
   const txHash = await wallet.sendTransaction({
     account: config.account!.address as Hex,
     chain: base, // polygon,
@@ -178,7 +180,6 @@ export async function executeTrade(
 export async function executeGaslessTrade(
   trade: TokenTrade,
   config: TradeConfig,
-  // wallet: WalletClient,
 ): Promise<{
   txState: TransactionState;
   userOpHash: string;
@@ -346,8 +347,6 @@ export async function executeGaslessTrade(
   };
 }
 
-// Helper Quoting and Pool Functions
-
 async function getOutputQuote(route: Route<Currency, Currency>) {
   const provider = publicClient;
 
@@ -456,7 +455,7 @@ async function getPermitSignature(
   try {
     const domain = {
       name: token.name!,
-      version: "2",
+      version: getDomainVersion(token.name!, base.id),
       chainId: base.id, // polygon.id,
       verifyingContract: token.address as Hex,
     };
@@ -497,4 +496,9 @@ async function getPermitSignature(
     console.error(e);
     return "0x";
   }
+}
+
+function getDomainVersion(tokenName: string, chainId: number): string {
+  // USDC seems to be using version 2 while everything else is version 1
+  return tokenName === "USD Coin" ? "2" : "1";
 }

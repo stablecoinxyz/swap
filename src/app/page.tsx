@@ -54,16 +54,16 @@ export default function Home() {
     token: SBC.address as Hex,
   });
 
-  useEffect(() => {
-    // add class for light mode
-    if (!gasless) {
-      document.documentElement.classList.remove("dark");
-      document.documentElement.classList.add("theme");
-    } else {
-      document.documentElement.classList.add("dark");
-      document.documentElement.classList.remove("theme");
-    }
-  }, [gasless]);
+  // useEffect(() => {
+  //   // add class for light mode
+  //   if (!gasless) {
+  //     document.documentElement.classList.remove("dark");
+  //     document.documentElement.classList.add("theme");
+  //   } else {
+  //     document.documentElement.classList.add("dark");
+  //     document.documentElement.classList.remove("theme");
+  //   }
+  // }, [gasless]);
   return (
     <main className="px-4 pb-10 min-h-[100vh] flex items-center justify-center container max-w-screen-lg mx-auto">
       <div className="py-8">
@@ -72,20 +72,7 @@ export default function Home() {
         <div className="flex justify-center">
           <div className="flex flex-col -mt-8 mb-16 space-y-4">
             <ConnectKitButton />
-            <div className="flex flex-row space-x-2 justify-center content-center ">
-              <Switch
-                className="flex border-zinc-400"
-                id="gasless-switch"
-                checked={gasless}
-                onCheckedChange={() => setGasless(!gasless)}
-              />
-              <Label
-                htmlFor="gasless-switch"
-                className="flex dark:bg-zinc-950 text-zinc-950 dark:text-neutral-100 pt-0.5 text-xs"
-              >
-                <p>Gasless: {gasless ? "ON" : "OFF"}</p>
-              </Label>
-            </div>
+            <GaslessSwitch />
           </div>
         </div>
 
@@ -472,5 +459,29 @@ export default function Home() {
         />
       </div>
     );
+  }
+
+  function GaslessSwitch() {
+    const migratedToUniversalRouter = false;
+    if (!migratedToUniversalRouter) {
+      return null;
+    } else {
+      return (
+        <div className="flex flex-row space-x-2 justify-center content-center ">
+          <Switch
+            className="flex border-zinc-400"
+            id="gasless-switch"
+            checked={gasless}
+            onCheckedChange={() => setGasless(!gasless)}
+          />
+          <Label
+            htmlFor="gasless-switch"
+            className="flex dark:bg-zinc-950 text-zinc-950 dark:text-neutral-100 pt-0.5 text-xs"
+          >
+            <p>Gasless: {gasless ? "ON" : "OFF"}</p>
+          </Label>
+        </div>
+      );
+    }
   }
 }

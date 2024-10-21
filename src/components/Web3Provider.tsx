@@ -21,8 +21,8 @@ const config = createConfig(
 
     // Optional App Info
     appDescription: "A gasless swap app",
-    appUrl: "https://swap.stablecoin.xyz", // your app's url
-    appIcon: "https://family.co/logo.png", // your app's icon, no bigger than 1024x1024px (max. 1MB)
+    appUrl: "https://swap.stablecoin.xyz",
+    // appIcon: "https://family.co/logo.png", // your app's icon, no bigger than 1024x1024px (max. 1MB)
   }),
 );
 
