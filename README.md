@@ -37,7 +37,7 @@ npm run start
 
 ## Deployment (Vercel)
 
-TBD
+Making deploys to the `main` branch will automatically deploy the project to Vercel.
 
 ## Author
 
