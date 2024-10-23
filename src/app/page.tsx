@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-
+import { NumericFormat } from "react-number-format";
 import { ConnectKitButton } from "connectkit";
 
 import { useAccount, useBalance, useWalletClient } from "wagmi";
@@ -243,6 +243,15 @@ export default function Home() {
   }
 
   function SbcContainer() {
+    async function updateUsdcValue(input: HTMLInputElement) {
+      const usdcInput = document.getElementById(
+        "usdcInput",
+      ) as HTMLInputElement;
+      const usdcOut = await quoteSbcToUsdc(input.value);
+      if (isSwitched && usdcInput) {
+        usdcInput.value = input.value ? usdcOut.toFixed(3) : "";
+      }
+    }
     return (
       <div className="flex flex-col border border-zinc-800 text-zinc-950 bg-zinc-50 p-4 rounded-lg w-full relative">
         <h2 className="text-lg font-semibold mb-2">SBC</h2>
@@ -303,30 +312,23 @@ export default function Home() {
               Number(sbcBalance.formatted).toFixed(3)}{" "}
           </span>
         </p>
-        <input
+        <NumericFormat
           id="sbcInput"
           type="text"
           className="mt-auto p-2 text-lg border border-zinc-600 text-zinc-950 bg-zinc-50 font-extrabold rounded w-full text-right"
           placeholder="Enter amount"
-          onInput={async (e) => {
+          thousandSeparator={true}
+          onInput={async (e: any) => {
             const input = e.target as HTMLInputElement;
             input.value = input.value.replace(/[^0-9.]/g, "");
-            // update usdc input with converted value based on current conversionRate
-            const usdcInput = document.getElementById(
-              "usdcInput",
-            ) as HTMLInputElement;
-            const usdcOut = await quoteSbcToUsdc(input.value);
-            if (isSwitched && usdcInput) {
-              usdcInput.value = input.value ? usdcOut.toFixed(3) : "";
-            }
+            await updateUsdcValue(input);
           }}
           onBlur={async (e) => {
             // set the input to the max value if it exceeds the balance
             const input = e.target as HTMLInputElement;
-            const value = Number(input.value);
-
+            const value = input.value.replace(/,/g, "");
             const balance = sbcBalance ? Number(sbcBalance.formatted) : 0;
-            if (value > balance) {
+            if (parseFloat(value) > balance) {
               input.value = balance.toFixed(3);
               // trigger onInput event to update usdc input
               input.dispatchEvent(
@@ -336,15 +338,7 @@ export default function Home() {
                 }),
               );
             }
-
-            // update usdc input with converted value based on current conversionRate
-            const usdcInput = document.getElementById(
-              "usdcInput",
-            ) as HTMLInputElement;
-            const usdcOut = await quoteSbcToUsdc(input.value);
-            if (isSwitched && usdcInput) {
-              usdcInput.value = input.value ? usdcOut.toFixed(3) : "";
-            }
+            await updateUsdcValue(input);
           }}
         />
       </div>
@@ -352,6 +346,14 @@ export default function Home() {
   }
 
   function UsdcContainer() {
+    async function updateSbcValue(input: HTMLInputElement) {
+      const sbcInput = document.getElementById("sbcInput") as HTMLInputElement;
+      const sbcOut = await quoteUsdcToSbc(input.value);
+      if (!isSwitched && sbcInput) {
+        sbcInput.value = input.value ? sbcOut.toFixed(3) : "";
+      }
+    }
+
     return (
       <div className="flex flex-col border border-zinc-800 text-zinc-950 bg-zinc-50 p-4 rounded-lg w-full relative">
         <h2 className="text-lg font-semibold mb-2">USDC</h2>
@@ -412,31 +414,23 @@ export default function Home() {
               Number(usdcBalance.formatted).toFixed(3)}
           </span>
         </p>
-        <input
+        <NumericFormat
           id="usdcInput"
           type="text"
           className="mt-auto p-2 text-lg border border-zinc-600 text-zinc-950 bg-zinc-50 font-extrabold rounded w-full text-right"
           placeholder="Enter amount"
-          onInput={async (e) => {
+          thousandSeparator={true}
+          onInput={async (e: any) => {
             const input = e.target as HTMLInputElement;
             input.value = input.value.replace(/[^0-9.]/g, "");
-
-            const sbcInput = document.getElementById(
-              "sbcInput",
-            ) as HTMLInputElement;
-            const sbcOut = await quoteUsdcToSbc(input.value);
-
-            if (!isSwitched && sbcInput) {
-              sbcInput.value = input.value ? sbcOut.toFixed(3) : "";
-            }
+            await updateSbcValue(input);
           }}
           onBlur={async (e) => {
             // set the input to the max value if it exceeds the balance
             const input = e.target as HTMLInputElement;
-            const value = Number(input.value);
-
+            const value = input.value.replace(/,/g, "");
             const balance = usdcBalance ? Number(usdcBalance.formatted) : 0;
-            if (value > balance) {
+            if (parseFloat(value) > balance) {
               input.value = balance.toFixed(3);
               // trigger onInput event to update sbc input
               input.dispatchEvent(
@@ -446,15 +440,7 @@ export default function Home() {
                 }),
               );
             }
-
-            // update sbc input with converted value based on current conversionRate
-            const sbcInput = document.getElementById(
-              "sbcInput",
-            ) as HTMLInputElement;
-            const sbcOut = await quoteUsdcToSbc(input.value);
-            if (!isSwitched && sbcInput) {
-              sbcInput.value = input.value ? sbcOut.toFixed(3) : "";
-            }
+            await updateSbcValue(input);
           }}
         />
       </div>
