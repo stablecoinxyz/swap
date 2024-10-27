@@ -1,11 +1,9 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useMemo } from "react";
 import { NumericFormat } from "react-number-format";
 import { ConnectKitButton } from "connectkit";
-
 import { useAccount, useBalance, useWalletClient } from "wagmi";
-
 import { getPoolData } from "@/lib/pool";
 import { USDC, SBC } from "@/lib/constants";
 import { createTrade, executeTrade, executeGaslessTrade } from "@/lib/trading";
@@ -33,6 +31,10 @@ export default function Home() {
 
   const [isSwitched, setIsSwitched] = useState(false);
   const [gasless, setGasless] = useState(true);
+  const [availableLiquidity0, setAvailableLiquidity0] = useState(0);
+  const [availableLiquidity1, setAvailableLiquidity1] = useState(0);
+  const [price0, setPrice0] = useState(0);
+  const [price1, setPrice1] = useState(0);
 
   const { toast } = useToast();
 
@@ -54,16 +56,25 @@ export default function Home() {
     token: SBC.address as Hex,
   });
 
-  // useEffect(() => {
-  //   // add class for light mode
-  //   if (!gasless) {
-  //     document.documentElement.classList.remove("dark");
-  //     document.documentElement.classList.add("theme");
-  //   } else {
-  //     document.documentElement.classList.add("dark");
-  //     document.documentElement.classList.remove("theme");
-  //   }
-  // }, [gasless]);
+  useMemo(async () => {
+    // get pool liquidity and store it in state
+    const [pool, _, __, token0Amount, token1Amount] = await getPoolData();
+    // console.debug("pool", pool);
+
+    // const availableLiquidity = Number(pool.liquidity);
+    // console.debug("Available liquidity", availableLiquidity);
+    console.debug("token0Amount", token0Amount);
+    console.debug("token1Amount", token1Amount);
+
+    // cache the available liquidity
+    setAvailableLiquidity0(token0Amount);
+    setAvailableLiquidity1(token1Amount);
+
+    // cache the prices
+    setPrice0(Number(pool.token0Price.toSignificant()));
+    setPrice1(Number(pool.token1Price.toSignificant()));
+  }, []);
+
   return (
     <main className="px-4 pb-10 min-h-[100vh] flex items-center justify-center container max-w-screen-lg mx-auto">
       <div className="py-8">
@@ -92,45 +103,83 @@ export default function Home() {
 
         <div className="flex justify-center mt-8">
           <button
+            type="button"
+            className="px-4 py-2  dark:bg-white bg-zinc-950 dark:text-zinc-950 text-neutral-100 rounded hover:font-extrabold disabled:font-normal disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={!isFetched || !isConnected}
             onClick={async () => {
               const { usdcAmount, sbcAmount } = getTradeAmounts();
               if (!usdcAmount && !sbcAmount) {
-                console.log("No amount entered");
+                toast({
+                  title: "No amount entered",
+                  description: `Please enter an amount to swap`,
+                  duration: 3000,
+                });
                 return;
               }
               if (!address) {
-                console.error("No account found");
+                toast({
+                  title: "No account found",
+                  description: `Please connect your wallet to perform the swap`,
+                  duration: 3000,
+                });
                 return;
               }
+
+              const tradeAmount = isSwitched
+                ? Number(sbcAmount.replace(/,/g, ""))
+                : Number(usdcAmount.replace(/,/g, ""));
+              console.log({ tradeAmount });
+              if (
+                tradeAmount > availableLiquidity0 ||
+                tradeAmount > availableLiquidity1
+              ) {
+                toast({
+                  title: "Not enough liquidity available",
+                  description: `Please swap a smaller amount`,
+                  duration: 3000,
+                });
+                return;
+              }
+
               toast({
                 title: "Performing Swap",
                 description: `Please wait while we process your transaction...`,
                 duration: 9000,
-                onClick: () => {
-                  window.open(getScannerUrl(base.id, receipt!.transactionHash));
-                },
               });
 
               const receipt = await doSwap(gasless);
 
-              resetTradeAmounts();
+              if (!receipt || "error" in receipt) {
+                const error = receipt.error || "Please try again later";
+                toast({
+                  title: "Transaction Failed",
+                  description: `😢 ${error}`,
+                  duration: 9000,
+                });
 
-              toast({
-                title: "Transaction Sent",
-                action: (
-                  <ToastAction altText="View on BaseScan">
-                    View Status
-                  </ToastAction>
-                ),
-                description: `🎉 Check your transaction status 👉🏻`,
-                duration: 9000,
-                onClick: () => {
-                  window.open(getScannerUrl(base.id, receipt!.transactionHash));
-                },
-              });
+                return;
+              } else if (
+                receipt &&
+                !("error" in receipt) &&
+                "transactionHash" in receipt
+              ) {
+                toast({
+                  title: "Transaction Sent",
+                  action: (
+                    <ToastAction altText="View on BaseScan">
+                      View Status
+                    </ToastAction>
+                  ),
+                  description: `🎉 Check your transaction status 👉🏻`,
+                  duration: 9000,
+                  onClick: () => {
+                    window.open(
+                      getScannerUrl(base.id, receipt!.transactionHash),
+                    );
+                  },
+                });
+              }
             }}
-            className="px-4 py-2  dark:bg-white bg-zinc-950 dark:text-zinc-950 text-neutral-100 rounded hover:font-extrabold disabled:font-normal disabled:cursor-not-allowed disabled:opacity-50"
-            disabled={!isFetched || !isConnected}
           >
             Swap
           </button>
@@ -145,27 +194,20 @@ export default function Home() {
   }
 
   async function quoteUsdcToSbc(usdcAmount: string) {
-    const pool = await getPoolData();
-    return Number(usdcAmount) * Number(pool.token0Price.toSignificant());
+    return Number(usdcAmount) * Number(price0);
   }
 
   async function quoteSbcToUsdc(sbcAmount: string) {
-    const pool = await getPoolData();
-    return Number(sbcAmount) * Number(pool.token1Price.toSignificant());
+    return Number(sbcAmount) * Number(price1);
   }
 
   async function doSwap(
     gasless: boolean,
-  ): Promise<TransactionReceipt | { transactionHash: Hex } | null> {
+  ): Promise<
+    TransactionReceipt | { transactionHash: Hex } | { error: string }
+  > {
     const { usdcAmount, sbcAmount } = getTradeAmounts();
-    if (!usdcAmount && !sbcAmount) {
-      console.log("No amount entered");
-      return null;
-    }
-    if (!address) {
-      console.error("No account found");
-      return null;
-    }
+    // console.log({ usdcAmount, sbcAmount });
     const config = CurrentConfig;
     config.provider = publicClient;
 
@@ -177,43 +219,50 @@ export default function Home() {
 
     const trade = await createTrade(config);
     if (!trade) {
-      console.error("No trade created");
-      return null;
+      return {
+        error: "No trade created",
+      };
     }
 
     let response;
-    if (gasless) {
-      const { userOpHash, txState: status } = await executeGaslessTrade(
-        trade,
-        config,
-      );
+    try {
+      if (gasless) {
+        const { userOpHash, txState: status } = await executeGaslessTrade(
+          trade,
+          config,
+        );
 
-      console.debug(
-        `Executed gasless trade: ${status}; Receipt: ${getScannerUrl(base.id, userOpHash)}`,
-      );
+        console.debug(
+          `Executed gasless trade: ${status}; Receipt: ${getScannerUrl(base.id, userOpHash)}`,
+        );
 
-      response = { transactionHash: userOpHash as Hex };
-    } else {
-      const { receipt, txState: status } = await executeTrade(
-        trade,
-        config,
-        CurrentConfig.wallet!,
-      );
+        response = { transactionHash: userOpHash as Hex };
+      } else {
+        const { receipt, txState: status } = await executeTrade(
+          trade,
+          config,
+          CurrentConfig.wallet!,
+        );
 
-      console.debug(
-        `Executed trade: ${status}; Receipt: ${getScannerUrl(base.id, receipt!.transactionHash)}`,
-      );
+        console.debug(
+          `Executed trade: ${status}; Receipt: ${getScannerUrl(base.id, receipt!.transactionHash)}`,
+        );
 
-      response = { transactionHash: receipt!.transactionHash };
+        response = { transactionHash: receipt!.transactionHash };
+      }
+      return response;
+    } catch (error) {
+      return {
+        error: "Error executing trade",
+      };
     }
-    return response;
   }
 
   function getTradeAmounts() {
     const usdcInput = document.getElementById("usdcInput") as HTMLInputElement;
     const sbcInput = document.getElementById("sbcInput") as HTMLInputElement;
-    const usdcAmount = usdcInput ? usdcInput.value : "";
-    const sbcAmount = sbcInput ? sbcInput.value : "";
+    const usdcAmount = usdcInput ? usdcInput.value.replace(/,/g, "") : "";
+    const sbcAmount = sbcInput ? sbcInput.value.replace(/,/g, "") : "";
     return { usdcAmount, sbcAmount };
   }
 
@@ -321,22 +370,15 @@ export default function Home() {
           onInput={async (e: any) => {
             const input = e.target as HTMLInputElement;
             input.value = input.value.replace(/[^0-9.]/g, "");
-            await updateUsdcValue(input);
-          }}
-          onBlur={async (e) => {
-            // set the input to the max value if it exceeds the balance
-            const input = e.target as HTMLInputElement;
+
             const value = input.value.replace(/,/g, "");
             const balance = sbcBalance ? Number(sbcBalance.formatted) : 0;
-            if (parseFloat(value) > balance) {
+            if (
+              parseFloat(value) > balance ||
+              parseFloat(value) > availableLiquidity0 ||
+              parseFloat(value) > availableLiquidity1
+            ) {
               input.value = balance.toFixed(3);
-              // trigger onInput event to update usdc input
-              input.dispatchEvent(
-                new Event("input", {
-                  bubbles: true,
-                  cancelable: true,
-                }),
-              );
             }
             await updateUsdcValue(input);
           }}
@@ -422,23 +464,15 @@ export default function Home() {
           thousandSeparator={true}
           onInput={async (e: any) => {
             const input = e.target as HTMLInputElement;
-            input.value = input.value.replace(/[^0-9.]/g, "");
-            await updateSbcValue(input);
-          }}
-          onBlur={async (e) => {
-            // set the input to the max value if it exceeds the balance
-            const input = e.target as HTMLInputElement;
-            const value = input.value.replace(/,/g, "");
+            const value = input.value.replace(/[^0-9.]/g, "");
+
             const balance = usdcBalance ? Number(usdcBalance.formatted) : 0;
-            if (parseFloat(value) > balance) {
+            if (
+              parseFloat(value) > balance ||
+              parseFloat(value) > availableLiquidity0 ||
+              parseFloat(value) > availableLiquidity1
+            ) {
               input.value = balance.toFixed(3);
-              // trigger onInput event to update sbc input
-              input.dispatchEvent(
-                new Event("input", {
-                  bubbles: true,
-                  cancelable: true,
-                }),
-              );
             }
             await updateSbcValue(input);
           }}

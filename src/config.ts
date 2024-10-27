@@ -27,7 +27,7 @@ export const CurrentConfig: TradeConfig = {
     local: "http://localhost:8545",
     mainnet: "",
     polygon: "https://polygon-rpc.com",
-    base: "https://base-rpc.publicnode.com", //https://base.llamarpc.com",
+    base: "https://base-rpc.publicnode.com",
   },
   tokens: {
     in: USDC,
