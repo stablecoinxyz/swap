@@ -1,4 +1,5 @@
-import Image from "next/image";
+"use client";
+
 import { ConnectKitButton } from "connectkit";
 
 export function ConnectWallet() {

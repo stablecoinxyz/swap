@@ -1,5 +1,4 @@
 import { Metadata } from "next";
-import { ConnectWallet } from "@/components/ConnectWallet";
 
 export const metadata: Metadata = {
   title: "Stable Coin | MassPay",

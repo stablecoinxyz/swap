@@ -1,9 +1,7 @@
 "use client";
 
-import type { Metadata } from "next";
 import React, { useState, useMemo } from "react";
 import { NumericFormat } from "react-number-format";
-import { ConnectKitButton } from "connectkit";
 import { useAccount, useBalance, useWalletClient } from "wagmi";
 import { getPoolData } from "@/lib/pool";
 import { USDC, SBC } from "@/lib/constants";
@@ -20,12 +18,6 @@ import { Label } from "@/components/ui/label";
 import { TransactionReceipt, Hex } from "viem";
 import { polygon, base } from "viem/chains";
 import { ConnectWallet } from "@/components/ConnectWallet";
-
-export const metadata: Metadata = {
-  title: "Stable Coin | Gasless Swap",
-  description: "",
-  keywords: "",
-};
 
 export default function Home() {
   const account = useAccount();
