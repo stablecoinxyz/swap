@@ -1,5 +1,6 @@
 "use client";
 
+import type { Metadata } from "next";
 import React, { useState, useMemo } from "react";
 import { NumericFormat } from "react-number-format";
 import { ConnectKitButton } from "connectkit";
@@ -8,7 +9,6 @@ import { getPoolData } from "@/lib/pool";
 import { USDC, SBC } from "@/lib/constants";
 import { createTrade, executeTrade, executeGaslessTrade } from "@/lib/trading";
 import { getScannerUrl } from "@/lib/providers";
-import { Header } from "@/components/Header";
 import SwitchIcon from "@/components/SwitchIcon";
 import { CurrentConfig } from "@/config";
 import { ToastAction } from "@/components/ui/toast";
@@ -19,6 +19,13 @@ import { Label } from "@/components/ui/label";
 
 import { TransactionReceipt, Hex } from "viem";
 import { polygon, base } from "viem/chains";
+import { ConnectWallet } from "@/components/ConnectWallet";
+
+export const metadata: Metadata = {
+  title: "Stable Coin | Gasless Swap",
+  description: "",
+  keywords: "",
+};
 
 export default function Home() {
   const account = useAccount();
@@ -63,8 +70,8 @@ export default function Home() {
 
     // const availableLiquidity = Number(pool.liquidity);
     // console.debug("Available liquidity", availableLiquidity);
-    console.debug("token0Amount", token0Amount);
-    console.debug("token1Amount", token1Amount);
+    // console.debug("token0Amount", token0Amount);
+    // console.debug("token1Amount", token1Amount);
 
     // cache the available liquidity
     setAvailableLiquidity0(token0Amount);
@@ -76,35 +83,28 @@ export default function Home() {
   }, []);
 
   return (
-    <main className="px-4 pb-10 min-h-[100vh] flex items-center justify-center container max-w-screen-lg mx-auto">
-      <div className="py-8">
+    <main className="px-4 pb-10 min-h-[100vh] flex items-top justify-center container max-w-screen-lg mx-auto">
+      <div className="w-1/2">
         <Header />
 
-        <div className="flex justify-center">
-          <div className="flex flex-col -mt-8 mb-16 space-y-4">
-            <ConnectKitButton />
-            <GaslessSwitch />
-          </div>
-        </div>
-
         {isSwitched ? (
-          <>
+          <div className="w-full">
             <SbcContainer />
             <Switcher />
             <UsdcContainer />
-          </>
+          </div>
         ) : (
-          <>
+          <div className="w-full">
             <UsdcContainer />
             <Switcher />
             <SbcContainer />
-          </>
+          </div>
         )}
 
         <div className="flex justify-center mt-8">
           <button
             type="button"
-            className="px-4 py-2  dark:bg-white bg-zinc-950 dark:text-zinc-950 text-neutral-100 rounded hover:font-extrabold disabled:font-normal disabled:cursor-not-allowed disabled:opacity-50"
+            className="px-10 py-3 rounded-lg dark:bg-white bg-zinc-950 dark:text-zinc-950 text-neutral-100  hover:font-extrabold disabled:font-normal disabled:cursor-not-allowed disabled:opacity-50"
             disabled={!isFetched || !isConnected}
             onClick={async () => {
               const { usdcAmount, sbcAmount } = getTradeAmounts();
@@ -187,6 +187,27 @@ export default function Home() {
       </div>
     </main>
   );
+
+  function Header() {
+    return (
+      <header className="flex flex-col items-center my-20 md:mb-20">
+        <h1 className="text-2xl font-semibold tracking-tighter">
+          Stable Coin | Gasless Swap
+        </h1>
+
+        <p className="text-base">
+          A gasless swap of USDC to SBC from{" "}
+          <a
+            href="https://stablecoin.xyz"
+            target="_blank"
+            className=" underline"
+          >
+            stablecoin.xyz
+          </a>
+        </p>
+      </header>
+    );
+  }
 
   function handleSwitch() {
     setIsSwitched(!isSwitched);
@@ -282,7 +303,7 @@ export default function Home() {
       <div className="flex justify-center my-4">
         <button
           onClick={handleSwitch}
-          className="px-2 py-2  rounded flex items-center justify-center"
+          className="px-2 py-2 rounded flex items-center justify-center"
           aria-label="Switch"
         >
           <SwitchIcon />
@@ -301,70 +322,74 @@ export default function Home() {
         usdcInput.value = input.value ? usdcOut.toFixed(3) : "";
       }
     }
+
     return (
       <div className="flex flex-col border border-zinc-800 text-zinc-950 bg-zinc-50 p-4 rounded-lg w-full relative">
-        <h2 className="text-lg font-semibold mb-2">SBC</h2>
-        <p className="text-sm absolute top-4 right-4">
-          {isSwitched && (
-            <>
-              <button
-                className="text-sm mr-2"
-                onClick={() => {
-                  const input = document.getElementById(
-                    "sbcInput",
-                  ) as HTMLInputElement;
-                  if (input) {
-                    input.value = sbcBalance
-                      ? (Number(sbcBalance.formatted) / 2).toFixed(3)
-                      : "0";
-                    // trigger onInput event to update usdc input
-                    input.dispatchEvent(
-                      new Event("input", {
-                        bubbles: true,
-                        cancelable: true,
-                      }),
-                    );
-                  }
-                }}
-              >
-                [50%]
-              </button>
-              <button
-                className="text-sm mr-8"
-                onClick={() => {
-                  const input = document.getElementById(
-                    "sbcInput",
-                  ) as HTMLInputElement;
-                  if (input) {
-                    input.value = sbcBalance
-                      ? Number(sbcBalance.formatted).toFixed(3)
-                      : "0";
-                    // trigger onInput event to update usdc input
-                    input.dispatchEvent(
-                      new Event("input", {
-                        bubbles: true,
-                        cancelable: true,
-                      }),
-                    );
-                  }
-                }}
-              >
-                [max]
-              </button>
-            </>
-          )}
-
-          <span className="font-bold">
-            Balance:{" "}
-            {!isSbcLoading &&
-              sbcBalance &&
-              Number(sbcBalance.formatted).toFixed(3)}{" "}
-          </span>
-        </p>
+        <div className="flex flex-row justify-between">
+          <h2 className="text-lg font-semibold mb-2">SBC</h2>
+          <div className="flex flex-col">
+            <span className="flex font-bold text-sm">
+              Balance:{" "}
+              {!isSbcLoading &&
+                sbcBalance &&
+                Number(sbcBalance.formatted).toFixed(3)}{" "}
+            </span>
+            <span className="flex text-sm w-full justify-end mt-1">
+              {isSwitched && (
+                <span className="flex">
+                  <button
+                    className="flex text-xs mr-2"
+                    onClick={() => {
+                      const input = document.getElementById(
+                        "sbcInput",
+                      ) as HTMLInputElement;
+                      if (input) {
+                        input.value = sbcBalance
+                          ? (Number(sbcBalance.formatted) / 2).toFixed(3)
+                          : "0";
+                        // trigger onInput event to update usdc input
+                        input.dispatchEvent(
+                          new Event("input", {
+                            bubbles: true,
+                            cancelable: true,
+                          }),
+                        );
+                      }
+                    }}
+                  >
+                    [50%]
+                  </button>
+                  <button
+                    className="flex text-xs"
+                    onClick={() => {
+                      const input = document.getElementById(
+                        "sbcInput",
+                      ) as HTMLInputElement;
+                      if (input) {
+                        input.value = sbcBalance
+                          ? Number(sbcBalance.formatted).toFixed(3)
+                          : "0";
+                        // trigger onInput event to update usdc input
+                        input.dispatchEvent(
+                          new Event("input", {
+                            bubbles: true,
+                            cancelable: true,
+                          }),
+                        );
+                      }
+                    }}
+                  >
+                    [max]
+                  </button>
+                </span>
+              )}
+            </span>
+          </div>
+        </div>
         <NumericFormat
           id="sbcInput"
           type="text"
-          className="mt-auto p-2 text-lg border border-zinc-600 text-zinc-950 bg-zinc-50 font-extrabold rounded w-full text-right"
+          className="mt-2 p-3 text-lg border border-zinc-600 text-zinc-950 bg-zinc-50 font-extrabold rounded w-full text-right"
           placeholder="Enter amount"
           thousandSeparator={true}
           onInput={async (e: any) => {
@@ -398,68 +423,72 @@ export default function Home() {
 
     return (
       <div className="flex flex-col border border-zinc-800 text-zinc-950 bg-zinc-50 p-4 rounded-lg w-full relative">
-        <h2 className="text-lg font-semibold mb-2">USDC</h2>
-        <p className="text-sm  absolute top-4 right-4">
-          {!isSwitched && (
-            <>
-              <button
-                className="text-sm mr-2"
-                onClick={() => {
-                  const input = document.getElementById(
-                    "usdcInput",
-                  ) as HTMLInputElement;
-                  if (input) {
-                    input.value = usdcBalance
-                      ? (Number(usdcBalance.formatted) / 2).toFixed(3)
-                      : "0";
-                    // trigger onInput event to update sbc input
-                    input.dispatchEvent(
-                      new Event("input", {
-                        bubbles: true,
-                        cancelable: true,
-                      }),
-                    );
-                  }
-                }}
-              >
-                [50%]
-              </button>
-              <button
-                className="text-sm mr-8"
-                onClick={() => {
-                  const input = document.getElementById(
-                    "usdcInput",
-                  ) as HTMLInputElement;
-                  if (input) {
-                    input.value = usdcBalance
-                      ? Number(usdcBalance.formatted).toFixed(3)
-                      : "0";
-                    // trigger onInput event to update sbc input
-                    input.dispatchEvent(
-                      new Event("input", {
-                        bubbles: true,
-                        cancelable: true,
-                      }),
-                    );
-                  }
-                }}
-              >
-                [max]
-              </button>
-            </>
-          )}
+        <div className="flex flex-row justify-between">
+          <h2 className="flex text-lg font-semibold mb-2">USDC</h2>
+          <div className="flex flex-col">
+            <span className="flex font-bold text-sm">
+              Balance:{" "}
+              {!isUsdcLoading &&
+                usdcBalance &&
+                Number(usdcBalance.formatted).toFixed(3)}
+            </span>
+            <span className="flex text-sm w-full justify-end mt-1">
+              {!isSwitched && (
+                <span className="flex">
+                  <button
+                    className="flex text-xs mr-2"
+                    onClick={() => {
+                      const input = document.getElementById(
+                        "usdcInput",
+                      ) as HTMLInputElement;
+                      if (input) {
+                        input.value = usdcBalance
+                          ? (Number(usdcBalance.formatted) / 2).toFixed(3)
+                          : "0";
+                        // trigger onInput event to update sbc input
+                        input.dispatchEvent(
+                          new Event("input", {
+                            bubbles: true,
+                            cancelable: true,
+                          }),
+                        );
+                      }
+                    }}
+                  >
+                    [50%]
+                  </button>
+                  <button
+                    className="flex text-xs"
+                    onClick={() => {
+                      const input = document.getElementById(
+                        "usdcInput",
+                      ) as HTMLInputElement;
+                      if (input) {
+                        input.value = usdcBalance
+                          ? Number(usdcBalance.formatted).toFixed(3)
+                          : "0";
+                        // trigger onInput event to update sbc input
+                        input.dispatchEvent(
+                          new Event("input", {
+                            bubbles: true,
+                            cancelable: true,
+                          }),
+                        );
+                      }
+                    }}
+                  >
+                    [max]
+                  </button>
+                </span>
+              )}
+            </span>
+          </div>
+        </div>
 
-          <span className="font-bold">
-            Balance:{" "}
-            {!isUsdcLoading &&
-              usdcBalance &&
-              Number(usdcBalance.formatted).toFixed(3)}
-          </span>
-        </p>
         <NumericFormat
           id="usdcInput"
           type="text"
-          className="mt-auto p-2 text-lg border border-zinc-600 text-zinc-950 bg-zinc-50 font-extrabold rounded w-full text-right"
+          className="mt-2 p-3 text-lg border border-zinc-600 text-zinc-950 bg-zinc-50 font-extrabold rounded w-full text-right"
           placeholder="Enter amount"
           thousandSeparator={true}
           onInput={async (e: any) => {
