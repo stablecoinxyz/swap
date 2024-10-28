@@ -187,16 +187,18 @@ export default function Home() {
           Stable Coin | Gasless Swap
         </h1>
 
-        <p className="text-base">
-          A gasless swap of USDC to SBC from{" "}
-          <a
-            href="https://stablecoin.xyz"
-            target="_blank"
-            className=" underline"
-          >
-            stablecoin.xyz
-          </a>
-        </p>
+        <div className="text-base mt-2">
+          A gasless swap of USDC &lt;&mdash;&gt; SBC
+          <div className="text-center">
+            <a
+              href="https://stablecoin.xyz"
+              target="_blank"
+              className="text-violet-700 hover:font-semibold"
+            >
+              stablecoin.xyz
+            </a>
+          </div>
+        </div>
       </header>
     );
   }

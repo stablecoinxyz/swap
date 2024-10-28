@@ -92,79 +92,79 @@ export async function getPoolData(): Promise<[Pool, any, any, number, number]> {
 
     const [sqrtPriceX96, currentTick, _, __, ___, ____, _____] = slot0 as any;
 
-    // console.debug("SqrtPriceX96", sqrtPriceX96 as bigint);
-    // console.debug("Tick", currentTick as bigint);
-    // console.debug("Liquidity", liquidity);
+    // // console.debug("SqrtPriceX96", sqrtPriceX96 as bigint);
+    // // console.debug("Tick", currentTick as bigint);
+    // // console.debug("Liquidity", liquidity);
 
-    // Get all ticks
-    const minWord = tickToWord(MIN_TICK);
-    const maxWord = tickToWord(MAX_TICK);
+    // // Get all ticks
+    // const minWord = tickToWord(MIN_TICK);
+    // const maxWord = tickToWord(MAX_TICK);
 
-    let calls: any[] = [];
-    let wordPosIndices: number[] = [];
-    for (let i = minWord; i <= maxWord; i++) {
-      wordPosIndices.push(i);
-      calls.push({
-        ...poolContract,
-        functionName: "tickBitmap",
-        args: [i as any],
-      });
-    }
+    // let calls: any[] = [];
+    // let wordPosIndices: number[] = [];
+    // for (let i = minWord; i <= maxWord; i++) {
+    //   wordPosIndices.push(i);
+    //   calls.push({
+    //     ...poolContract,
+    //     functionName: "tickBitmap",
+    //     args: [i as any],
+    //   });
+    // }
 
-    const tickBitmapResults: bigint[] = (
-      await publicClient.multicall({ contracts: calls })
-    ).map((response) => {
-      return response.result as bigint;
-    });
+    // const tickBitmapResults: bigint[] = (
+    //   await publicClient.multicall({ contracts: calls })
+    // ).map((response) => {
+    //   return response.result as bigint;
+    // });
 
-    // Build array containing indices of all initialized ticks
-    const tickIndices: number[] = [];
-    for (let j = 0; j < wordPosIndices.length; j++) {
-      const ind = wordPosIndices[j];
-      const bitmap = tickBitmapResults[j];
+    // // Build array containing indices of all initialized ticks
+    // const tickIndices: number[] = [];
+    // for (let j = 0; j < wordPosIndices.length; j++) {
+    //   const ind = wordPosIndices[j];
+    //   const bitmap = tickBitmapResults[j];
 
-      if (bitmap !== 0n) {
-        for (let i = 0; i < 256; i++) {
-          const bit = 1n;
-          const initialized = (bitmap & (bit << BigInt(i))) > 0n;
-          if (initialized) {
-            const tickIndex = (ind * 256 + i) * TICK_SPACINGS[FeeAmount.LOWEST];
-            tickIndices.push(tickIndex);
-          }
-        }
-      }
-    }
+    //   if (bitmap !== 0n) {
+    //     for (let i = 0; i < 256; i++) {
+    //       const bit = 1n;
+    //       const initialized = (bitmap & (bit << BigInt(i))) > 0n;
+    //       if (initialized) {
+    //         const tickIndex = (ind * 256 + i) * TICK_SPACINGS[FeeAmount.LOWEST];
+    //         tickIndices.push(tickIndex);
+    //       }
+    //     }
+    //   }
+    // }
 
-    // reset calls
-    calls = [];
+    // // reset calls
+    // calls = [];
 
-    // Get all tick data by their indices
-    for (const index of tickIndices) {
-      calls.push({
-        ...poolContract,
-        functionName: "ticks",
-        args: [index],
-      });
-    }
-    const ticksResults = await publicClient.multicall({ contracts: calls });
+    // // Get all tick data by their indices
+    // for (const index of tickIndices) {
+    //   calls.push({
+    //     ...poolContract,
+    //     functionName: "ticks",
+    //     args: [index],
+    //   });
+    // }
+    // const ticksResults = await publicClient.multicall({ contracts: calls });
 
-    // Liquidity gross and net are at index 0 and 1 respectively
-    const LIQ_GROSS = 0;
-    const LIQ_NET = 1;
-    const allTicks: Tick[] = [];
-    for (let i = 0; i < tickIndices.length; i++) {
-      const index = tickIndices[i];
-      const response = ticksResults[i].result;
+    // // Liquidity gross and net are at index 0 and 1 respectively
+    // const LIQ_GROSS = 0;
+    // const LIQ_NET = 1;
+    // const allTicks: Tick[] = [];
+    // for (let i = 0; i < tickIndices.length; i++) {
+    //   const index = tickIndices[i];
+    //   const response = ticksResults[i].result;
 
-      // console.debug("Tick response", response);
+    //   // console.debug("Tick response", response);
 
-      const tick = new Tick({
-        index,
-        liquidityGross: JSBI.BigInt((response as any)[LIQ_GROSS].toString()),
-        liquidityNet: JSBI.BigInt((response as any)[LIQ_NET].toString()),
-      });
-      allTicks.push(tick);
-    }
+    //   const tick = new Tick({
+    //     index,
+    //     liquidityGross: JSBI.BigInt((response as any)[LIQ_GROSS].toString()),
+    //     liquidityNet: JSBI.BigInt((response as any)[LIQ_NET].toString()),
+    //   });
+    //   allTicks.push(tick);
+    // }
 
     const fullPool = new Pool(
       USDC,
@@ -173,7 +173,7 @@ export async function getPoolData(): Promise<[Pool, any, any, number, number]> {
       sqrtPriceX96.toString(),
       (liquidity as bigint).toString(),
       currentTick,
-      allTicks,
+      // allTicks,
     );
 
     // Get token amounts

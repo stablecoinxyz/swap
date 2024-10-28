@@ -9,13 +9,16 @@
     <circle r="385" transform="translate(0,0)" fill="#8760f2"/>
   </g>
   <g id="eKgCWIOpRqD4_ts" transform="translate(200,200) scale(0.454545,0.454542)">
-    <circle r="330" transform="translate(0,0)" fill="none"/>
+    <circle r="330" transform="translate(0,0)" fill="#a588f5"/>
   </g>
   <g id="eKgCWIOpRqD5_ts" transform="translate(200,200) scale(0.454545,0.454542)">
     <circle r="275" transform="translate(0,0)" fill="#c3aff9"/>
   </g>
   <g id="eKgCWIOpRqD6_ts" transform="translate(200,200) scale(0.454545,0.454542)">
     <circle r="220" transform="translate(0,0)" fill="#e1d7fc"/>
+  </g>
+  <g id="eKgCWIOpRqD7_ts" transform="translate(200,200) scale(0.454545,0.454542)">
+    <circle r="165" transform="translate(0,0)" fill="#fff"/>
   </g>
   <g id="eKgCWIOpRqD8_ts" transform="translate(200,200) scale(0.454545,0.454542)">
     <circle r="110" transform="translate(0,0)" fill="#6938ef"/>
