@@ -120,7 +120,7 @@ export default function Home() {
               const tradeAmount = isSwitched
                 ? Number(sbcAmount.replace(/,/g, ""))
                 : Number(usdcAmount.replace(/,/g, ""));
-              console.log({ tradeAmount });
+              console.debug({ tradeAmount });
               if (
                 tradeAmount > availableLiquidity0 ||
                 tradeAmount > availableLiquidity1
@@ -222,7 +222,7 @@ export default function Home() {
     TransactionReceipt | { transactionHash: Hex } | { error: string }
   > {
     const { usdcAmount, sbcAmount } = getTradeAmounts();
-    // console.log({ usdcAmount, sbcAmount });
+    // console.debug({ usdcAmount, sbcAmount });
     const config = CurrentConfig;
     config.provider = publicClient;
 
