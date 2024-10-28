@@ -65,7 +65,7 @@ export async function createTrade(
   config: TradeConfig,
   inverse = false,
 ): Promise<TokenTrade> {
-  const poolData = await getPoolData();
+  const [poolData, _, __] = await getPoolData();
 
   const inToken = inverse ? config.tokens.out : config.tokens.in;
   const outToken = inverse ? config.tokens.in : config.tokens.out;
@@ -184,167 +184,172 @@ export async function executeGaslessTrade(
   txState: TransactionState;
   userOpHash: string;
 }> {
-  if (!config.account!.address) {
-    throw new Error("Cannot execute a trade without a connected wallet");
-  }
-  const walletAddress = config.account!.address;
+  try {
+    if (!config.account!.address) {
+      throw new Error("Cannot execute a trade without a connected wallet");
+    }
+    const walletAddress = config.account!.address;
 
-  const owner = createWalletClient({
-    account: walletAddress as Hex,
-    chain: base, // polygon,
-    transport: custom((window as any).ethereum),
-  });
+    const owner = createWalletClient({
+      account: walletAddress as Hex,
+      chain: base, // polygon,
+      transport: custom((window as any).ethereum),
+    });
 
-  // create a new SimpleAccount instance
-  const simpleAccount = await toSimpleSmartAccount({
-    client: publicClient,
-    owner: owner,
-    entryPoint: {
-      address: entryPoint07Address,
-      version: "0.7",
-    },
-  });
-
-  // get the sender (counterfactual) address of the SimpleAccount
-  console.debug("Sender Address", simpleAccount.address);
-  const senderAddress = simpleAccount.address;
-
-  const amountIn = fromReadableAmount(
-    config.tokens.amountIn,
-    config.tokens.in.decimals as number,
-  );
-
-  const deadline = Math.floor(Date.now() / 1000) + 60 * 20;
-
-  const smartAccountClient = createSmartAccountClient({
-    account: simpleAccount,
-    chain: base, // polygon,
-    bundlerTransport: http(pimlicoUrlForChain(base)),
-    paymaster: pimlicoClient,
-    userOperation: {
-      estimateFeesPerGas: async () => {
-        return (await pimlicoClient.getUserOperationGasPrice()).fast;
+    // create a new SimpleAccount instance
+    const simpleAccount = await toSimpleSmartAccount({
+      client: publicClient,
+      owner: owner,
+      entryPoint: {
+        address: entryPoint07Address,
+        version: "0.7",
       },
-    },
-  });
+    });
 
-  // now transfer the amountIn to the SimpleAccount
-  const erc20ContractAbi = new ethers.Interface(erc20Abi);
-  const transferData = erc20ContractAbi.encodeFunctionData("transferFrom", [
-    walletAddress,
-    senderAddress,
-    amountIn,
-  ]) as Hex;
-  // encode the approval transaction
-  const approveData = erc20ContractAbi.encodeFunctionData("approve", [
-    SWAP_ROUTER_02_ADDRESSES(base.id), //polygon.id),
-    amountIn,
-  ]);
+    // get the sender (counterfactual) address of the SimpleAccount
+    console.debug("Sender Address", simpleAccount.address);
+    const senderAddress = simpleAccount.address;
 
-  // encode the swap transaction
-  const options: SwapOptions = {
-    // 50 bips, or 0.50%
-    slippageTolerance: new Percent(50, 10_000),
-    // 20 minutes from the current Unix time
-    deadline,
-    // the recipient of the output token
-    recipient: walletAddress,
-  };
-
-  const methodParameters = SwapRouter.swapCallParameters([trade], options);
-
-  // HACK: args should be all elements in args_ except for `deadline`, thus exclude it
-  // @dev: this is a really bizzare way to do this, but it works for now. Note that we're
-  // using swapRouterAbi to decode the function data, but swapRouter2Abi to encode it without
-  // the `deadline` argument. It doesn't seem to work any other way if we're using the
-  // Uniswap SDK as-is.
-  const swapData_ = methodParameters.calldata as Hex;
-  const { functionName, args } = decodeFunctionData({
-    abi: swapRouterAbi,
-    data: swapData_,
-  });
-
-  delete (args as any)[0]["deadline"];
-
-  // re-encode the swap transaction without the `deadline` argument
-  const swapData = encodeFunctionData({
-    abi: swapRouter2Abi,
-    functionName,
-    args,
-  });
-
-  // package the calls together in the correct order
-  const calls = [
-    {
-      to: config.tokens.in.address as Hex,
-      data: transferData,
-    },
-    {
-      to: config.tokens.in.address as Hex,
-      data: approveData as Hex,
-    },
-    {
-      to: SWAP_ROUTER_02_ADDRESSES(base.id) as Hex,
-      data: swapData,
-    },
-  ];
-
-  console.debug(
-    `Checking token approval for ${config.tokens.in.symbol}; amount ${config.tokens.amountIn}; sender address: ${senderAddress}`,
-  );
-
-  const isApproved = await checkTokenApproval(
-    config.tokens.in,
-    config.tokens.amountIn,
-    senderAddress,
-  );
-
-  // If the token transfer is not approved, prepend the permit data instruction
-  if (!isApproved) {
-    // get EOA signature to permit the SimpleAccount to spend the amountIn
-    const signature = await getPermitSignature(
-      owner,
-      config.tokens.in,
-      walletAddress,
-      senderAddress,
-      amountIn,
-      deadline,
+    const amountIn = fromReadableAmount(
+      config.tokens.amountIn,
+      config.tokens.in.decimals as number,
     );
 
-    const { r, s, v } = parseSignature(signature);
+    const deadline = Math.floor(Date.now() / 1000) + 60 * 20;
 
-    // encode the permit transaction calldata
-    const erc20PermitContractAbi = new ethers.Interface(erc20PermitAbi);
-    const permitData = erc20PermitContractAbi.encodeFunctionData("permit", [
+    const smartAccountClient = createSmartAccountClient({
+      account: simpleAccount,
+      chain: base, // polygon,
+      bundlerTransport: http(pimlicoUrlForChain(base)),
+      paymaster: pimlicoClient,
+      userOperation: {
+        estimateFeesPerGas: async () => {
+          return (await pimlicoClient.getUserOperationGasPrice()).fast;
+        },
+      },
+    });
+
+    // now transfer the amountIn to the SimpleAccount
+    const erc20ContractAbi = new ethers.Interface(erc20Abi);
+    const transferData = erc20ContractAbi.encodeFunctionData("transferFrom", [
       walletAddress,
       senderAddress,
       amountIn,
-      deadline,
-      v,
-      r,
-      s,
     ]) as Hex;
+    // encode the approval transaction
+    const approveData = erc20ContractAbi.encodeFunctionData("approve", [
+      SWAP_ROUTER_02_ADDRESSES(base.id), //polygon.id),
+      amountIn,
+    ]);
 
-    // prepend to the calls array
-    calls.unshift({
-      to: config.tokens.in.address as Hex,
-      data: permitData,
+    // encode the swap transaction
+    const options: SwapOptions = {
+      // 50 bips, or 0.50%
+      slippageTolerance: new Percent(50, 10_000),
+      // 20 minutes from the current Unix time
+      deadline,
+      // the recipient of the output token
+      recipient: walletAddress,
+    };
+
+    const methodParameters = SwapRouter.swapCallParameters([trade], options);
+
+    // HACK: args should be all elements in args_ except for `deadline`, thus exclude it
+    // @dev: this is a really bizzare way to do this, but it works for now. Note that we're
+    // using swapRouterAbi to decode the function data, but swapRouter2Abi to encode it without
+    // the `deadline` argument. It doesn't seem to work any other way if we're using the
+    // Uniswap SDK as-is.
+    const swapData_ = methodParameters.calldata as Hex;
+    const { functionName, args } = decodeFunctionData({
+      abi: swapRouterAbi,
+      data: swapData_,
     });
+
+    delete (args as any)[0]["deadline"];
+
+    // re-encode the swap transaction without the `deadline` argument
+    const swapData = encodeFunctionData({
+      abi: swapRouter2Abi,
+      functionName,
+      args,
+    });
+
+    // package the calls together in the correct order
+    const calls = [
+      {
+        to: config.tokens.in.address as Hex,
+        data: transferData,
+      },
+      {
+        to: config.tokens.in.address as Hex,
+        data: approveData as Hex,
+      },
+      {
+        to: SWAP_ROUTER_02_ADDRESSES(base.id) as Hex,
+        data: swapData,
+      },
+    ];
+
+    console.debug(
+      `Checking token approval for ${config.tokens.in.symbol}; amount ${config.tokens.amountIn}; sender address: ${senderAddress}`,
+    );
+
+    const isApproved = await checkTokenApproval(
+      config.tokens.in,
+      config.tokens.amountIn,
+      senderAddress,
+    );
+
+    // If the token transfer is not approved, prepend the permit data instruction
+    if (!isApproved) {
+      // get EOA signature to permit the SimpleAccount to spend the amountIn
+      const signature = await getPermitSignature(
+        owner,
+        config.tokens.in,
+        walletAddress,
+        senderAddress,
+        amountIn,
+        deadline,
+      );
+
+      const { r, s, v } = parseSignature(signature);
+
+      // encode the permit transaction calldata
+      const erc20PermitContractAbi = new ethers.Interface(erc20PermitAbi);
+      const permitData = erc20PermitContractAbi.encodeFunctionData("permit", [
+        walletAddress,
+        senderAddress,
+        amountIn,
+        deadline,
+        v,
+        r,
+        s,
+      ]) as Hex;
+
+      // prepend to the calls array
+      calls.unshift({
+        to: config.tokens.in.address as Hex,
+        data: permitData,
+      });
+    }
+
+    // send the batch call transaction to the SimpleAccount,
+    // with the paymaster context set to the base gas credits policy
+    const userOpHash = await smartAccountClient.sendTransaction({
+      calls,
+      paymasterContext: {
+        sponsorshipPolicyId: "sp_base_gas_credits",
+      },
+    });
+
+    return {
+      txState: TransactionState.Sent,
+      userOpHash,
+    };
+  } catch (e) {
+    console.error(e);
+    throw e;
   }
-
-  // send the batch call transaction to the SimpleAccount,
-  // with the paymaster context set to the base gas credits policy
-  const userOpHash = await smartAccountClient.sendTransaction({
-    calls,
-    paymasterContext: {
-      sponsorshipPolicyId: "sp_base_gas_credits",
-    },
-  });
-
-  return {
-    txState: TransactionState.Sent,
-    userOpHash,
-  };
 }
 
 async function getOutputQuote(route: Route<Currency, Currency>) {
