@@ -2,6 +2,13 @@
 
 import { WagmiProvider, createConfig, http } from "wagmi";
 import { polygon, base } from "wagmi/chains";
+import {
+  coinbaseWallet,
+  injected,
+  metaMask,
+  safe,
+  walletConnect,
+} from "wagmi/connectors";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ConnectKitProvider, getDefaultConfig } from "connectkit";
 import { CurrentConfig } from "@/config";
@@ -9,6 +16,13 @@ import { CurrentConfig } from "@/config";
 const config = createConfig(
   getDefaultConfig({
     chains: [base, polygon],
+    connectors: [
+      // injected(),
+      metaMask(),
+      coinbaseWallet(),
+      // walletConnect(),
+      // safe(),
+    ],
     transports: {
       [base.id]: http(CurrentConfig.rpc.base),
       [polygon.id]: http(CurrentConfig.rpc.polygon),
@@ -22,11 +36,17 @@ const config = createConfig(
     // Optional App Info
     appDescription: "A gasless swap app",
     appUrl: "https://swap.stablecoin.xyz",
-    // appIcon: "https://family.co/logo.png", // your app's icon, no bigger than 1024x1024px (max. 1MB)
+    appIcon: "https://swap.stablecoin.xyz/sbc-logo.svg", // your app's icon, no bigger than 1024x1024px (max. 1MB)
   }),
 );
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      refetchOnWindowFocus: true,
+    },
+  },
+});
 
 interface Web3ProviderProps {
   children: React.ReactNode;
