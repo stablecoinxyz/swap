@@ -16,8 +16,7 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 
 import { TransactionReceipt, Hex } from "viem";
-import { polygon, base } from "viem/chains";
-import { ConnectWallet } from "@/components/ConnectWallet";
+import { base } from "viem/chains";
 
 export default function Home() {
   const account = useAccount();

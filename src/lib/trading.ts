@@ -21,10 +21,13 @@ import JSBI from "jsbi";
 import swapRouterAbi from "@/lib/abi/swapRouter.abi";
 import swapRouter2Abi from "@/lib/abi/swapRouter2.abi";
 import erc20PermitAbi from "@/lib/abi/erc20Permit.abi";
-// import { abi as quoterAbi } from "@uniswap/v3-periphery/artifacts/contracts/interfaces/IQuoter.sol/IQuoter.json";
 
 import { CurrentConfig, TradeConfig } from "@/config";
-import { MAX_FEE_PER_GAS, MAX_PRIORITY_FEE_PER_GAS } from "@/lib/constants";
+import {
+  MAX_FEE_PER_GAS,
+  MAX_PRIORITY_FEE_PER_GAS,
+  SBC,
+} from "@/lib/constants";
 import { getPoolData } from "@/lib/pool";
 import {
   TransactionState,
@@ -35,12 +38,10 @@ import {
 import { fromReadableAmount } from "@/lib/extras";
 
 import {
-  Account,
   createWalletClient,
   custom,
   decodeFunctionData,
   decodeAbiParameters,
-  DecodeAbiParametersReturnType,
   encodeFunctionData,
   erc20Abi,
   Hex,
@@ -50,8 +51,8 @@ import {
   WalletClient,
   parseAbiParameters,
 } from "viem";
-import { keccak256, toBytes } from "viem";
-import { base, polygon } from "viem/chains";
+
+import { base } from "viem/chains";
 import { entryPoint07Address } from "viem/account-abstraction";
 
 import { toSimpleSmartAccount } from "permissionless/accounts";
@@ -158,7 +159,7 @@ export async function executeTrade(
   // FIX: if time permits, switch over the implementation to use UniversalRouter instead
   const txHash = await wallet.sendTransaction({
     account: config.account!.address as Hex,
-    chain: base, // polygon,
+    chain: base,
     data: methodParameters.calldata as Hex,
     to: SWAP_ROUTER_02_ADDRESSES(base.id) as Hex, //polygon.id),
     value: BigInt(methodParameters.value),
@@ -192,7 +193,7 @@ export async function executeGaslessTrade(
 
     const owner = createWalletClient({
       account: walletAddress as Hex,
-      chain: base, // polygon,
+      chain: base,
       transport: custom((window as any).ethereum),
     });
 
@@ -346,6 +347,119 @@ export async function executeGaslessTrade(
       txState: TransactionState.Sent,
       userOpHash,
     };
+  } catch (e) {
+    console.error(e);
+    throw e;
+  }
+}
+
+export async function executeGaslessMassPay(
+  txs: { to: string; value: number }[],
+): Promise<string> {
+  try {
+    const owner = createWalletClient({
+      account: CurrentConfig.account!.address as Hex,
+      chain: base,
+      transport: custom((window as any).ethereum),
+    });
+
+    // create a new SimpleAccount instance
+    const simpleAccount = await toSimpleSmartAccount({
+      client: publicClient,
+      owner: owner,
+      entryPoint: {
+        address: entryPoint07Address,
+        version: "0.7",
+      },
+    });
+
+    // get the sender (counterfactual) address of the SimpleAccount
+    console.debug("Sender Address", simpleAccount.address);
+    const senderAddress = simpleAccount.address;
+
+    // 30 min deadline
+    const deadline = Math.floor(Date.now() / 1000) + 60 * 30;
+
+    const smartAccountClient = createSmartAccountClient({
+      account: simpleAccount,
+      chain: base,
+      bundlerTransport: http(pimlicoUrlForChain(base)),
+      paymaster: pimlicoClient,
+      userOperation: {
+        estimateFeesPerGas: async () => {
+          return (await pimlicoClient.getUserOperationGasPrice()).fast;
+        },
+      },
+    });
+
+    // calculate tx values as BigInts using decimal 18
+    const txnBigInts = txs.map((tx) => {
+      return {
+        to: tx.to,
+        value: BigInt(fromReadableAmount(tx.value, 18).toString()),
+      };
+    });
+    console.debug(owner.account.address, txs, txnBigInts);
+
+    const calls = txnBigInts.map((tx) => {
+      const erc20ContractAbi = new ethers.Interface(erc20Abi);
+      const transferData = erc20ContractAbi.encodeFunctionData("transferFrom", [
+        owner.account.address as Hex,
+        tx.to,
+        tx.value,
+      ]) as Hex;
+      return {
+        from: owner.account.address as Hex,
+        to: SBC.address as Hex,
+        data: transferData,
+      };
+    });
+
+    const totalValue = BigInt(
+      txnBigInts.reduce((acc, tx) => acc + tx.value, 0n),
+    );
+
+    // prepend the permit data instruction
+    const signature = await getPermitSignature(
+      owner,
+      SBC,
+      CurrentConfig.account!.address as Hex,
+      senderAddress,
+      totalValue,
+      deadline,
+    );
+
+    const { r, s, v } = parseSignature(signature);
+
+    // encode the permit transaction calldata
+    const erc20PermitContractAbi = new ethers.Interface(erc20PermitAbi);
+    const permitData = erc20PermitContractAbi.encodeFunctionData("permit", [
+      CurrentConfig.account!.address as Hex,
+      senderAddress,
+      totalValue,
+      deadline,
+      v,
+      r,
+      s,
+    ]) as Hex;
+
+    // prepend to the calls array
+    calls.unshift({
+      from: owner.account.address as Hex,
+      to: SBC.address as Hex,
+      data: permitData,
+    });
+
+    // send the batch call transaction to the SimpleAccount,
+    // with the paymaster context set to the base gas credits policy
+    const userOpHash = await smartAccountClient.sendTransaction({
+      calls,
+      paymasterContext: {
+        sponsorshipPolicyId: "sp_base_gas_credits",
+      },
+    });
+
+    return userOpHash;
   } catch (e) {
     console.error(e);
     throw e;
