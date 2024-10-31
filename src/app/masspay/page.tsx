@@ -30,6 +30,7 @@ export default function MassPayPage() {
     CurrentConfig.account = account!;
   }
 
+  const [csvMode, setCsvMode] = useState<boolean>(false);
   const [addrAmt, setAddrAmt] = useState<string>("");
 
   const { toast } = useToast();
@@ -69,118 +70,11 @@ e.g.
         <Header />
 
         <div className="mx-auto min-w-[100px]">
-          <div className="mb-2 text-lg bg-slate-50 p-4 rounded w-auto">
-            <div className="flex flex-col items-center space-y-2">
-              <div className="flex flex-row space-x-2 text-normal font-semibold">
-                <Image
-                  className="flex"
-                  src="/sbc-logo.svg"
-                  alt="Stable Coin Inc."
-                  width="24"
-                  height="24"
-                />
-                <div className="flex">SBC</div>
-              </div>
-              <div className="flex text-sm">{SBC.address}</div>
-              {sbcBalance && (
-                <div className="flex px-4 py-2 rounded-lg bg-yellow-50">
-                  Balance:{" "}
-                  {!isSbcLoading &&
-                    sbcBalance &&
-                    Number(sbcBalance.formatted).toFixed(3)}{" "}
-                </div>
-              )}
-            </div>
-          </div>
+          <WalletBalanceInfo />
 
-          <textarea
-            id="addressesAmounts"
-            key="addressesAmounts"
-            value={addrAmt}
-            className="w-full h-48 mt-4 p-2 border border-gray-700 rounded-lg text-sm"
-            placeholder={placeholder}
-            onChange={(e) => setAddrAmt(e.target.value.trim())}
-          />
+          {csvMode ? <CsvMode /> : <CopyPasteMode />}
 
-          <Dialog>
-            <DialogTrigger asChild>
-              <button className={btnClasses} disabled={!isValid(addrAmt)}>
-                Continue
-              </button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-[600px]">
-              <DialogHeader>
-                <DialogTitle>Confirm Recipients And Amounts</DialogTitle>
-                <DialogDescription>
-                  Make sure everything looks good below before you send your
-                  SBC.
-                </DialogDescription>
-              </DialogHeader>
-
-              <div className="grid grid-cols-6 items-center gap-2 text-sm pt-4">
-                <div className="col-span-5 text-sm font-extrabold">Address</div>
-                <div className="col-span-1 text-sm font-extrabold">Amount</div>
-
-                {addrAmt.split("\n").map((line, idx) => {
-                  const [addr, amt] = line.split(",");
-                  if (idx < 3 || idx > addrAmt.split("\n").length - 4) {
-                    return (
-                      <Fragment key={idx}>
-                        <div className="col-span-5 text-sm p-2 border relative">
-                          {addr}
-                        </div>
-                        <div className="col-span-1 bg-zinc-100 p-2 text-right">
-                          {amt}
-                        </div>
-                      </Fragment>
-                    );
-                  } else if (idx === 3) {
-                    return (
-                      <div key={idx} className="col-span-6">
-                        <div className="text-sm text-center p-2">...</div>
-                      </div>
-                    );
-                  } else {
-                    return null;
-                  }
-                })}
-              </div>
-
-              <div className="grid grid-cols-2 text-sm mt-4">
-                <div className="">Beginning balance:</div>
-                <div className="text-right">
-                  {sbcBalance && Number(sbcBalance.formatted).toFixed(6)}
-                </div>
-                <div className="">Recipients:</div>
-                <div className="text-right">
-                  {addrAmt.split("\n").length} addresses
-                </div>
-                <div className="">Total amount to send:</div>
-                <div className="text-right">
-                  {sbcBalance && getTotalAmtToSend(addrAmt)}
-                </div>
-                <div className="">Ending balance:</div>
-                <div className="text-right">
-                  {sbcBalance &&
-                    (
-                      Number(sbcBalance.formatted) -
-                      Number(getTotalAmtToSend(addrAmt))
-                    ).toFixed(6)}
-                </div>
-              </div>
-
-              <DialogFooter>
-                <button
-                  type="button"
-                  className={btnClasses}
-                  onClick={async (e) => await handleSubmit(e)}
-                  disabled={!isValid(addrAmt)}
-                >
-                  Send
-                </button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+          <Disclaimer />
         </div>
       </div>
     </main>
@@ -287,6 +181,173 @@ e.g.
           </div>
         </div>
       </header>
+    );
+  }
+
+  function Disclaimer() {
+    return (
+      <div className="text-center mt-4 text-xs text-gray-500">
+        <p>
+          <strong>Disclaimer:</strong> This utility is provided as-is and
+          without warranty. Please verify all addresses and amounts before
+          sending.
+        </p>
+      </div>
+    );
+  }
+
+  function WalletBalanceInfo() {
+    return (
+      <div className="mb-2 text-lg bg-slate-50 p-4 rounded w-auto">
+        <div className="flex flex-col items-center space-y-2">
+          <div className="flex flex-row space-x-2 text-normal font-semibold">
+            <Image
+              className="flex"
+              src="/sbc-logo.svg"
+              alt="Stable Coin Inc."
+              width="24"
+              height="24"
+            />
+            <div className="flex">SBC</div>
+          </div>
+          <div className="flex text-sm">{SBC.address}</div>
+          {sbcBalance && (
+            <div className="flex px-4 py-2 rounded-lg bg-yellow-50">
+              Balance:{" "}
+              {!isSbcLoading &&
+                sbcBalance &&
+                Number(sbcBalance.formatted).toFixed(3)}{" "}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  function CopyPasteMode() {
+    return (
+      <>
+        <textarea
+          id="addressesAmounts"
+          key="addressesAmounts"
+          value={addrAmt}
+          className="w-full h-48 mt-4 p-2 border border-gray-700 rounded-lg text-sm"
+          placeholder={placeholder}
+          onChange={(e) => setAddrAmt(e.target.value.trim())}
+        />
+
+        <Dialog>
+          <DialogTrigger asChild>
+            <button className={btnClasses} disabled={!isValid(addrAmt)}>
+              Continue
+            </button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-[600px]">
+            <DialogHeader>
+              <DialogTitle>Confirm Recipients And Amounts</DialogTitle>
+              <DialogDescription>
+                Make sure everything looks good below before you send your SBC.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="grid grid-cols-6 items-center gap-2 text-sm pt-4">
+              <div className="col-span-5 text-sm font-extrabold">Address</div>
+              <div className="col-span-1 text-sm font-extrabold">Amount</div>
+
+              {addrAmt.split("\n").map((line, idx) => {
+                const [addr, amt] = line.split(",");
+                if (idx < 3 || idx > addrAmt.split("\n").length - 4) {
+                  return (
+                    <Fragment key={idx}>
+                      <div className="col-span-5 text-sm p-2 border relative">
+                        {addr}
+                      </div>
+                      <div className="col-span-1 bg-zinc-100 p-2 text-right">
+                        {amt}
+                      </div>
+                    </Fragment>
+                  );
+                } else if (idx === 3) {
+                  return (
+                    <div key={idx} className="col-span-6">
+                      <div className="text-sm text-center p-2">...</div>
+                    </div>
+                  );
+                } else {
+                  return null;
+                }
+              })}
+            </div>
+
+            <div className="grid grid-cols-2 text-sm mt-4">
+              <div className="">Beginning balance:</div>
+              <div className="text-right">
+                {sbcBalance && Number(sbcBalance.formatted).toFixed(6)}
+              </div>
+              <div className="">Recipients:</div>
+              <div className="text-right">
+                {addrAmt.split("\n").length} addresses
+              </div>
+              <div className="">Total amount to send:</div>
+              <div className="text-right">
+                {sbcBalance && getTotalAmtToSend(addrAmt)}
+              </div>
+              <div className="">Ending balance:</div>
+              <div className="text-right">
+                {sbcBalance &&
+                  (
+                    Number(sbcBalance.formatted) -
+                    Number(getTotalAmtToSend(addrAmt))
+                  ).toFixed(6)}
+              </div>
+            </div>
+
+            <DialogFooter>
+              <button
+                type="button"
+                className={btnClasses}
+                onClick={async (e) => await handleSubmit(e)}
+                disabled={!isValid(addrAmt)}
+              >
+                Send
+              </button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <div className="text-center text-xs text-gray-500 my-4">
+          <p className="text-lg">
+            Or{" "}
+            <strong>
+              <button onClick={() => setCsvMode(true)}>Upload a CSV</button>
+            </strong>
+          </p>
+        </div>
+      </>
+    );
+  }
+
+  function CsvMode() {
+    return (
+      <>
+        <div className="text-center text-xs text-gray-500 my-4">
+          <p>
+            <strong>CSV Mode:</strong> Upload a CSV file with addresses and
+            amounts.
+          </p>
+        </div>
+
+        <div className="text-center text-xs text-gray-500 my-4">
+          <p className="text-lg">
+            Back to{" "}
+            <strong>
+              <button onClick={() => setCsvMode(false)}>
+                Copying &amp; Pasting Data
+              </button>
+            </strong>
+          </p>
+        </div>
+      </>
     );
   }
 }
