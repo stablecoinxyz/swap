@@ -18,8 +18,10 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+
+import { CsvImporter } from "@/components/CsvImporter";
 import { executeGaslessMassPay } from "@/lib/trading";
-import { CurrentConfig } from "@/config";
+import { CurrentConfig, dataConfig, type DataConfig } from "@/config";
 
 export default function MassPayPage() {
   const account = useAccount();
@@ -32,6 +34,7 @@ export default function MassPayPage() {
 
   const [csvMode, setCsvMode] = useState<boolean>(false);
   const [addrAmt, setAddrAmt] = useState<string>("");
+  const [csvData, setCsvData] = useState<DataConfig>(dataConfig);
 
   const { toast } = useToast();
 
@@ -115,11 +118,11 @@ e.g.
   /**
    * Handles the form submission event.
    *
-   * @param {React.FormEvent<HTMLFormElement>} evt - The form submission event.
+   * @param {React.FormEvent<HTMLElement>} evt - The form submission event.
    * @returns {Promise<void>} A promise that resolves when the form submission handling is complete.
    */
   async function handleSubmit(
-    evt: React.FormEvent<HTMLButtonElement>,
+    evt: React.FormEvent<HTMLElement>,
   ): Promise<void> {
     evt.preventDefault();
     toast({
@@ -159,6 +162,8 @@ e.g.
         duration: 8000,
       });
     }
+
+    resetData();
   }
 
   function Header() {
@@ -224,6 +229,102 @@ e.g.
     );
   }
 
+  function resetData() {
+    setAddrAmt("");
+    setCsvData(dataConfig);
+  }
+
+  function PreviewDialog() {
+    return (
+      <Dialog>
+        <DialogTrigger asChild>
+          <button className={btnClasses} disabled={!isValid(addrAmt)}>
+            Continue
+          </button>
+        </DialogTrigger>
+        {addrAmt && (
+          <button
+            className="text-violet-600 hover:font-semibold w-full mt-2 py-3"
+            onClick={() => resetData()}
+          >
+            Start Over
+          </button>
+        )}
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>Confirm Recipients And Amounts</DialogTitle>
+            <DialogDescription>
+              Make sure everything looks good below before you send your SBC.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid grid-cols-6 items-center gap-2 text-sm pt-4">
+            <div className="col-span-5 text-sm font-extrabold">Address</div>
+            <div className="col-span-1 text-sm font-extrabold">Amount</div>
+
+            {addrAmt.split("\n").map((line, idx) => {
+              const [addr, amt] = line.split(",");
+              if (idx < 3 || idx > addrAmt.split("\n").length - 4) {
+                return (
+                  <Fragment key={idx}>
+                    <div className="col-span-5 text-sm p-2 border relative">
+                      {addr}
+                    </div>
+                    <div className="col-span-1 bg-zinc-100 p-2 text-right">
+                      {amt}
+                    </div>
+                  </Fragment>
+                );
+              } else if (idx === 3) {
+                return (
+                  <div key={idx} className="col-span-6">
+                    <div className="text-sm text-center p-2">...</div>
+                  </div>
+                );
+              } else {
+                return null;
+              }
+            })}
+          </div>
+
+          <div className="grid grid-cols-2 text-sm mt-4">
+            <div className="">Beginning balance:</div>
+            <div className="text-right">
+              {sbcBalance && Number(sbcBalance.formatted).toFixed(6)}
+            </div>
+            <div className="">Recipients:</div>
+            <div className="text-right">
+              {addrAmt.split("\n").length} addresses
+            </div>
+            <div className="">Total amount to send:</div>
+            <div className="text-right">
+              {sbcBalance && getTotalAmtToSend(addrAmt)}
+            </div>
+            <div className="">Ending balance:</div>
+            <div className="text-right">
+              {sbcBalance &&
+                (
+                  Number(sbcBalance.formatted) -
+                  Number(getTotalAmtToSend(addrAmt))
+                ).toFixed(6)}
+            </div>
+          </div>
+
+          <DialogFooter>
+            <button
+              type="button"
+              className={btnClasses}
+              onClick={async (e) => await handleSubmit(e)}
+              disabled={!isValid(addrAmt)}
+            >
+              Send
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
   function CopyPasteMode() {
     return (
       <>
@@ -236,86 +337,9 @@ e.g.
           onChange={(e) => setAddrAmt(e.target.value.trim())}
         />
 
-        <Dialog>
-          <DialogTrigger asChild>
-            <button className={btnClasses} disabled={!isValid(addrAmt)}>
-              Continue
-            </button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[600px]">
-            <DialogHeader>
-              <DialogTitle>Confirm Recipients And Amounts</DialogTitle>
-              <DialogDescription>
-                Make sure everything looks good below before you send your SBC.
-              </DialogDescription>
-            </DialogHeader>
+        <PreviewDialog />
 
-            <div className="grid grid-cols-6 items-center gap-2 text-sm pt-4">
-              <div className="col-span-5 text-sm font-extrabold">Address</div>
-              <div className="col-span-1 text-sm font-extrabold">Amount</div>
-
-              {addrAmt.split("\n").map((line, idx) => {
-                const [addr, amt] = line.split(",");
-                if (idx < 3 || idx > addrAmt.split("\n").length - 4) {
-                  return (
-                    <Fragment key={idx}>
-                      <div className="col-span-5 text-sm p-2 border relative">
-                        {addr}
-                      </div>
-                      <div className="col-span-1 bg-zinc-100 p-2 text-right">
-                        {amt}
-                      </div>
-                    </Fragment>
-                  );
-                } else if (idx === 3) {
-                  return (
-                    <div key={idx} className="col-span-6">
-                      <div className="text-sm text-center p-2">...</div>
-                    </div>
-                  );
-                } else {
-                  return null;
-                }
-              })}
-            </div>
-
-            <div className="grid grid-cols-2 text-sm mt-4">
-              <div className="">Beginning balance:</div>
-              <div className="text-right">
-                {sbcBalance && Number(sbcBalance.formatted).toFixed(6)}
-              </div>
-              <div className="">Recipients:</div>
-              <div className="text-right">
-                {addrAmt.split("\n").length} addresses
-              </div>
-              <div className="">Total amount to send:</div>
-              <div className="text-right">
-                {sbcBalance && getTotalAmtToSend(addrAmt)}
-              </div>
-              <div className="">Ending balance:</div>
-              <div className="text-right">
-                {sbcBalance &&
-                  (
-                    Number(sbcBalance.formatted) -
-                    Number(getTotalAmtToSend(addrAmt))
-                  ).toFixed(6)}
-              </div>
-            </div>
-
-            <DialogFooter>
-              <button
-                type="button"
-                className={btnClasses}
-                onClick={async (e) => await handleSubmit(e)}
-                disabled={!isValid(addrAmt)}
-              >
-                Send
-              </button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-
-        <div className="text-center text-xs text-gray-500 my-4">
+        <div className="text-center text-xs text-gray-500 my-8 py-8 border-t-2 border-violet-200">
           <p className="text-lg">
             Or{" "}
             <strong>
@@ -330,14 +354,61 @@ e.g.
   function CsvMode() {
     return (
       <>
-        <div className="text-center text-xs text-gray-500 my-4">
-          <p>
-            <strong>CSV Mode:</strong> Upload a CSV file with addresses and
-            amounts.
-          </p>
+        <div className="text-gray-500 my-4">
+          <div className="flex flex-col gap-4 pt-8">
+            {!addrAmt && (
+              <>
+                <CsvImporter
+                  fields={[
+                    { label: "Address", value: "address", required: true },
+                    { label: "Amount", value: "amount", required: true },
+                  ]}
+                  onImport={(parsedData) => {
+                    const formattedData: DataConfig = parsedData.map(
+                      (item) => ({
+                        address: String(item.address ?? ""),
+                        amount: String(item.amount ?? ""),
+                      }),
+                    );
+
+                    setCsvData((prev) => [...prev, ...formattedData]);
+
+                    const addrAmtData = formattedData
+                      .map((item) => `${item.address},${item.amount}`)
+                      .join("\n");
+
+                    setAddrAmt(addrAmtData);
+                  }}
+                  className="self-end"
+                />
+                <span className="text-center text-xs mb-8">
+                  Note: the first row of your CSV file must be:{" "}
+                  <code className="bg-yellow-50 px-1 mx-1">address,amount</code>
+                </span>
+              </>
+            )}
+
+            {csvData && csvData.length > 0 && isValid(addrAmt) && (
+              <div className="rounded-md border w-full text-center">
+                🔎 {csvData.length} rows of data found.
+              </div>
+            )}
+            {addrAmt && !isValid(addrAmt) && (
+              <div className="rounded-md border w-full text-center">
+                ⚠️ Please check your data and try again.
+                <button
+                  className="text-violet-600 hover:font-semibold w-full mt-2 py-3"
+                  onClick={() => resetData()}
+                >
+                  Start Over
+                </button>
+              </div>
+            )}
+            {addrAmt && isValid(addrAmt) && <PreviewDialog />}
+          </div>
         </div>
 
-        <div className="text-center text-xs text-gray-500 my-4">
+        <div className="text-center text-xs text-gray-500 my-8 py-8 border-t-2 border-violet-200">
           <p className="text-lg">
             Back to{" "}
             <strong>
