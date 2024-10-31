@@ -39,3 +39,11 @@ export const CurrentConfig: TradeConfig = {
   wallet: null,
   account: null,
 };
+
+// CSV Data configs
+export type DataConfig = {
+  address: string;
+  amount: string;
+}[];
+
+export const dataConfig = [];
