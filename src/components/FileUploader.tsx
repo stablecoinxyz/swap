@@ -231,9 +231,9 @@ export function FileUploader(props: FileUploaderProps) {
                     aria-hidden="true"
                   />
                 </div>
-                <p className="font-medium text-muted-foreground">
+                <div className="font-medium text-muted-foreground">
                   Drop the files here
-                </p>
+                </div>
               </div>
             ) : (
               <div className="flex flex-col items-center justify-center gap-4 sm:px-5">
@@ -244,16 +244,16 @@ export function FileUploader(props: FileUploaderProps) {
                   />
                 </div>
                 <div className="flex flex-col gap-px">
-                  <p className="font-medium text-muted-foreground">
+                  <div className="font-medium text-muted-foreground">
                     Drag {`'n'`} drop files here, or click to select files
-                  </p>
-                  <p className="text-sm text-muted-foreground/70">
+                  </div>
+                  <div className="text-sm text-muted-foreground/70">
                     You can upload
                     {maxFileCount > 1
                       ? ` ${maxFileCount === Infinity ? "multiple" : maxFileCount}
                       files (up to ${formatBytes(maxSize)} each)`
                       : ` a file with ${formatBytes(maxSize)}`}
-                  </p>
+                  </div>
                 </div>
               </div>
             )}
@@ -291,12 +291,12 @@ function FileCard({ file, progress, onRemove }: FileCardProps) {
         {isFileWithPreview(file) ? <FilePreview file={file} /> : null}
         <div className="flex w-full flex-col gap-2">
           <div className="flex flex-col gap-px">
-            <p className="line-clamp-1 text-sm font-medium text-foreground/80">
+            <div className="line-clamp-1 text-sm font-medium text-foreground/80">
               {file.name}
-            </p>
-            <p className="text-xs text-muted-foreground">
+            </div>
+            <div className="text-xs text-muted-foreground">
               {formatBytes(file.size)}
-            </p>
+            </div>
           </div>
           {progress ? <Progress value={progress} /> : null}
         </div>

@@ -8,6 +8,7 @@ To run this project, you will need to add the following environment variables to
 
 - `NEXT_PUBLIC_PIMLICO_API_KEY` - refer to the [Pimlico dashboard](https://dashboard.pimlico.io/)
 - `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` - refer to the [WalletConnect dashboard](https://cloud.reown.com/)
+- `NEXT_PUBLIC_ALCHEMY_BASE_ENDPOINT` - (optional) include if you want to use a custom Alchemy RPC endpoint
 
 ## Run locally
 

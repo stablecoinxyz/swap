@@ -7,8 +7,6 @@ import { UseAccountReturnType } from "wagmi";
 export interface TradeConfig {
   rpc: {
     local: string;
-    mainnet: string;
-    polygon: string;
     base: string;
   };
   tokens: {
@@ -25,8 +23,6 @@ export interface TradeConfig {
 export const CurrentConfig: TradeConfig = {
   rpc: {
     local: "http://localhost:8545",
-    mainnet: "",
-    polygon: "https://polygon-rpc.com",
     base: "https://base-rpc.publicnode.com",
   },
   tokens: {

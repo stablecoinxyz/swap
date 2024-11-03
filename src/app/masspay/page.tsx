@@ -4,6 +4,7 @@ import { Fragment, useState } from "react";
 import { useAccount, useBalance, useWalletClient } from "wagmi";
 import { Hex, isAddress } from "viem";
 import { base } from "viem/chains";
+import { ethers } from "ethers";
 
 import { getScannerUrl } from "@/lib/providers";
 import { SBC } from "@/lib/constants";
@@ -20,7 +21,7 @@ import {
 } from "@/components/ui/dialog";
 
 import { CsvImporter } from "@/components/CsvImporter";
-import { executeGaslessMassPay } from "@/lib/trading";
+import { estimateGasForMassPay, executeGaslessMassPay } from "@/lib/trading";
 import { CurrentConfig, dataConfig, type DataConfig } from "@/config";
 
 export default function MassPayPage() {
@@ -115,6 +116,19 @@ e.g.
     return totalAmtToSend;
   }
 
+  async function estimateGas(txs: any) {
+    try {
+      const gasCost = await estimateGasForMassPay(txs);
+      return gasCost;
+    } catch (error) {
+      toast({
+        title: "Gas Estimation Failed",
+        description: `There was an error sending your transaction. Please try again later.`,
+        duration: 3000,
+      });
+    }
+  }
+
   /**
    * Handles the form submission event.
    *
@@ -192,11 +206,11 @@ e.g.
   function Disclaimer() {
     return (
       <div className="text-center mt-4 text-xs text-gray-500">
-        <p>
+        <div>
           <strong>Disclaimer:</strong> This utility is provided as-is and
           without warranty. Please verify all addresses and amounts before
           sending.
-        </p>
+        </div>
       </div>
     );
   }
@@ -254,7 +268,34 @@ e.g.
           <DialogHeader>
             <DialogTitle>Confirm Recipients And Amounts</DialogTitle>
             <DialogDescription>
-              Make sure everything looks good below before you send your SBC.
+              <div className="my-2 py-2">
+                Make sure everything looks good below before you send your SBC.
+                You can also{" "}
+                <a
+                  href="#"
+                  onClick={async (e) => {
+                    const txs = addrAmt.split("\n").map((line) => {
+                      const [addr, amt] = line.split(",");
+                      return {
+                        to: addr.trim(),
+                        value: parseFloat(amt.trim()),
+                      };
+                    });
+                    const gasCost = (await estimateGas(txs)) as bigint;
+                    const friendlyGasCost = ethers.formatUnits(gasCost, "gwei");
+                    const gasCostInEth = ethers.formatUnits(gasCost, "ether");
+                    console.debug(gasCost);
+                    toast({
+                      title: "Gas Estimate",
+                      description: `Gas cost for this transaction is ${friendlyGasCost} gwei (${gasCostInEth} ETH).`,
+                      duration: 10000,
+                    });
+                  }}
+                >
+                  [estimate the gas impact]
+                </a>
+                .
+              </div>
             </DialogDescription>
           </DialogHeader>
 
@@ -340,12 +381,12 @@ e.g.
         <PreviewDialog />
 
         <div className="text-center text-xs text-gray-500 my-8 py-8 border-t-2 border-violet-200">
-          <p className="text-lg">
+          <div className="text-lg">
             Or{" "}
             <strong>
               <button onClick={() => setCsvMode(true)}>Upload a CSV</button>
             </strong>
-          </p>
+          </div>
         </div>
       </>
     );
@@ -409,14 +450,14 @@ e.g.
         </div>
 
         <div className="text-center text-xs text-gray-500 my-8 py-8 border-t-2 border-violet-200">
-          <p className="text-lg">
+          <div className="text-lg">
             Back to{" "}
             <strong>
               <button onClick={() => setCsvMode(false)}>
                 Copying &amp; Pasting Data
               </button>
             </strong>
-          </p>
+          </div>
         </div>
       </>
     );

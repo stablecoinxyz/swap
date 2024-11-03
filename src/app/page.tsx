@@ -20,8 +20,8 @@ import { base } from "viem/chains";
 
 export default function Home() {
   const account = useAccount();
-  const { address, isConnected } = account;
-  const { data: wallet, isFetched } = useWalletClient();
+  const { address, isConnected, isReconnecting } = account;
+  const { data: wallet, isFetched, isRefetching } = useWalletClient();
   if (isFetched && isConnected) {
     CurrentConfig.wallet = wallet!;
     CurrentConfig.account = account!;
@@ -96,7 +96,9 @@ export default function Home() {
           <button
             type="button"
             className="px-10 py-3 rounded-lg dark:bg-white bg-zinc-950 dark:text-zinc-950 text-neutral-100  hover:font-extrabold disabled:font-normal disabled:cursor-not-allowed disabled:opacity-50"
-            disabled={!isFetched || !isConnected}
+            disabled={
+              !isFetched || !isConnected || isReconnecting || isRefetching
+            }
             onClick={async () => {
               const { usdcAmount, sbcAmount } = getTradeAmounts();
               if (!usdcAmount && !sbcAmount) {
