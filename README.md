@@ -38,7 +38,7 @@ npm run start
 
 ## Deployment (Vercel)
 
-Making deploys or pull requests to the `main` branch will automatically deploy the project to Vercel
+Making commits or merging pull requests to the `main` branch will automatically deploy to Vercel (production environment at [https://swap.stablecoin.xyz](https://swap.stablecoin.xyz)).
 
 ## Author
 
