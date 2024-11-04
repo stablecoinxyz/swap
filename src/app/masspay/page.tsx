@@ -421,8 +421,17 @@ e.g.
                     setAddrAmt(addrAmtData);
                   }}
                   className="self-end"
+                  disabled={!isConnected}
                 />
                 <span className="text-center text-xs mb-8">
+                  {!isConnected && (
+                    <>
+                      <span className="text-red-500">
+                        Please connect your wallet
+                      </span>{" "}
+                      to upload a CSV file.{" "}
+                    </>
+                  )}
                   Note: the first row of your CSV file must be:{" "}
                   <code className="bg-yellow-50 px-1 mx-1">address,amount</code>
                 </span>
