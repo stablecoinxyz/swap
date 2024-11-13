@@ -2,18 +2,26 @@
 import Image from "next/image";
 import { Fragment, useState, useMemo } from "react";
 import { useAccount, useBalance, useChainId, useWalletClient } from "wagmi";
-import { useCapabilities, useWriteContracts } from "wagmi/experimental";
-import { Hex, custom, createWalletClient, parseAbi } from "viem";
+// import { useCapabilities, useWriteContracts } from "wagmi/experimental";
+import {
+  Hex,
+  custom,
+  createWalletClient,
+  parseAbi,
+  createClient,
+  http,
+} from "viem";
 import { base, baseSepolia, localhost } from "viem/chains";
-// import { entryPoint07Address } from "viem/account-abstraction";
+
 // import { ethers } from "ethers";
 // import { toSimpleSmartAccount } from "permissionless/accounts";
 // import { createSmartAccountClient } from "permissionless";
 
-import { Capabilities } from "@/components/Capabilities";
-// import { paymasterActionsEip7677 } from "@/lib/eip7677";
+// import { Capabilities } from "@/components/Capabilities";
 import { SBC, SBC_BASE_SEPOLIA } from "@/lib/constants";
 import { CurrentConfig } from "@/config";
+import { paymasterActionsEip7677 } from "@/lib/eip7677";
+import { entryPoint07Address } from "viem/account-abstraction";
 
 const PAYMASTER_SERVER_URL = process.env.NEXT_PUBLIC_PAYMASTER_SERVICE_URL!;
 
@@ -27,28 +35,27 @@ export default function CustomPaymasterPage() {
     CurrentConfig.account = account!;
   }
 
-  const { data: availableCapabilities } = useCapabilities({
-    account: account.address,
-  });
-
   console.debug("Setting up with Paymaster Server URL", PAYMASTER_SERVER_URL);
 
-  const capabilities = useMemo(() => {
-    if (!availableCapabilities || !account.chainId) return;
-    const capabilitiesForChain = availableCapabilities[account.chainId];
-    if (
-      capabilitiesForChain["paymasterService"] &&
-      capabilitiesForChain["paymasterService"].supported
-    ) {
-      return {
-        paymasterService: {
-          url: PAYMASTER_SERVER_URL,
-        },
-      };
-    }
-  }, [availableCapabilities, account.chainId]);
-
-  const { writeContracts } = useWriteContracts();
+  // @DEV: Required for EIP5792Approach
+  // const { data: availableCapabilities } = useCapabilities({
+  //   account: account.address,
+  // });
+  // const capabilities = useMemo(() => {
+  //   if (!availableCapabilities || !account.chainId) return;
+  //   const capabilitiesForChain = availableCapabilities[account.chainId];
+  //   if (
+  //     capabilitiesForChain["paymasterService"] &&
+  //     capabilitiesForChain["paymasterService"].supported
+  //   ) {
+  //     return {
+  //       paymasterService: {
+  //         url: PAYMASTER_SERVER_URL,
+  //       },
+  //     };
+  //   }
+  // }, [availableCapabilities, account.chainId]);
+  // const { writeContracts } = useWriteContracts();
 
   const {
     data: sbcBalance,
@@ -69,9 +76,9 @@ export default function CustomPaymasterPage() {
 
         <div className="mx-auto min-w-[100px]">
           <WalletBalanceInfo />
-          <Capabilities />
+
           <button className={btnClasses} onClick={buildUserOp}>
-            Send 0.1 SBC to Eric
+            Send 0.00001 SBC to Eric
           </button>
         </div>
       </div>
@@ -88,40 +95,8 @@ export default function CustomPaymasterPage() {
 
     console.debug("Owner Address", owner.account.address);
 
-    // owner is coinbase smart wallet, which we can use as-is
-    const senderAddress = owner.account.address;
-
-    // const paymasterClient = createClient({
-    //   chain: baseSepolia,
-    //   transport: http(PAYMASTER_SERVER_URL),
-    // }).extend(paymasterActionsEip7677({ entryPoint: entryPoint07Address }));
-
-    const abi = parseAbi([
-      "function approve(address, uint256) returns (bool)",
-      "function transferFrom(address, address, uint256) returns (bool)",
-    ]);
-
-    writeContracts({
-      capabilities,
-      contracts: [
-        {
-          address: SBC_BASE_SEPOLIA.address as Hex,
-          abi,
-          functionName: "approve",
-          args: [senderAddress, 100n],
-        },
-        {
-          address: SBC_BASE_SEPOLIA.address as Hex,
-          abi,
-          functionName: "transferFrom",
-          args: [
-            senderAddress,
-            "0x124b082e8DF36258198da4Caa3B39c7dFa64D9cE", // Eric
-            10n,
-          ],
-        },
-      ],
-    });
+    // EIP5792Approach(owner);
+    MiddlewareApproach(owner);
   }
 
   function Header() {
@@ -144,8 +119,7 @@ export default function CustomPaymasterPage() {
           </div>
         </div>
         <div className="fixed bottom-0 text-center my-2 bg-yellow-100 p-2">
-          Only Base Sepolia is supported. Ensure your wallet is connected to
-          Base Sepolia (Chain ID: 84532)
+          Ensure your wallet is connected to Base Sepolia (Chain ID: 84532)
         </div>
       </header>
     );
@@ -178,4 +152,48 @@ export default function CustomPaymasterPage() {
       </div>
     );
   }
+
+  function MiddlewareApproach(owner: any) {
+    const paymasterClient = createClient({
+      chain: baseSepolia,
+      transport: http(PAYMASTER_SERVER_URL),
+    }).extend(paymasterActionsEip7677({ entryPoint: entryPoint07Address }));
+
+    console.debug("Paymaster Client", paymasterClient);
+  }
+
+  // function EIP5792Approach(owner: any) {
+  //   // DEV- Ends up in several dead-ends
+  //   // Keeping it here for reference
+  //
+  //   // owner is coinbase smart wallet (EIP5792 compatiable), which we'll use as-is
+  //   const senderAddress = owner.account.address;
+  //   // make a minimal ABI
+  //   const abi = parseAbi([
+  //     "function approve(address, uint256) returns (bool)",
+  //     "function transferFrom(address, address, uint256) returns (bool)",
+  //   ]);
+  //   // Approve the paymaster to spend 100 SBC, and send 10 SBC to Eric
+  //   writeContracts({
+  //     capabilities,
+  //     contracts: [
+  //       {
+  //         address: SBC_BASE_SEPOLIA.address as Hex,
+  //         abi,
+  //         functionName: "approve",
+  //         args: [senderAddress, 100n],
+  //       },
+  //       {
+  //         address: SBC_BASE_SEPOLIA.address as Hex,
+  //         abi,
+  //         functionName: "transferFrom",
+  //         args: [
+  //           senderAddress,
+  //           "0x124b082e8DF36258198da4Caa3B39c7dFa64D9cE", // Eric
+  //           10n,
+  //         ],
+  //       },
+  //     ],
+  //   });
+  // }
 }
