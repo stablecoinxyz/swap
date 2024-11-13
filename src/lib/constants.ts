@@ -37,3 +37,11 @@ export const SBC = new Token(
 
 export const MAX_FEE_PER_GAS = 100000000000;
 export const MAX_PRIORITY_FEE_PER_GAS = 100000000000;
+
+export const SBC_BASE_SEPOLIA = new Token(
+  84532,
+  "0xf9FB20B8E097904f0aB7d12e9DbeE88f2dcd0F16",
+  6,
+  "SBC",
+  "Stable Coin",
+);

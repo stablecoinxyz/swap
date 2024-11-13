@@ -1,23 +1,22 @@
 "use client";
 
 import { WagmiProvider, createConfig, http, fallback } from "wagmi";
-import { base } from "wagmi/chains";
+import { base, baseSepolia } from "wagmi/chains";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ConnectKitProvider, getDefaultConfig } from "connectkit";
 import { CurrentConfig } from "@/config";
 
-const fallbacks = [http(CurrentConfig.rpc.base)];
-
-if (process.env.NEXT_PUBLIC_ALCHEMY_BASE_ENDPOINT) {
-  fallbacks.push(http(process.env.NEXT_PUBLIC_ALCHEMY_BASE_ENDPOINT));
-}
+// if (process.env.NEXT_PUBLIC_ALCHEMY_BASE_ENDPOINT) {
+//   fallbacks.push(http(process.env.NEXT_PUBLIC_ALCHEMY_BASE_ENDPOINT));
+// }
 
 const config = createConfig(
   getDefaultConfig({
-    chains: [base],
+    chains: [base, baseSepolia],
     transports: {
-      [base.id]: fallback(fallbacks),
+      [base.id]: fallback([http(CurrentConfig.rpc.base)]),
+      [baseSepolia.id]: fallback([http(CurrentConfig.rpc.baseSepolia)]),
     },
 
     walletConnectProjectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID!,

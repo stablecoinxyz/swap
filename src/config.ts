@@ -1,13 +1,14 @@
 import { Token } from "@uniswap/sdk-core";
 import { FeeAmount } from "@uniswap/v3-sdk";
 
-import { USDC, SBC } from "@/lib/constants";
+import { USDC, SBC, SBC_BASE_SEPOLIA } from "@/lib/constants";
 import { PublicClient, WalletClient } from "viem";
 import { UseAccountReturnType } from "wagmi";
 export interface TradeConfig {
   rpc: {
     local: string;
     base: string;
+    baseSepolia: string;
   };
   tokens: {
     in: Token;
@@ -24,6 +25,7 @@ export const CurrentConfig: TradeConfig = {
   rpc: {
     local: "http://localhost:8545",
     base: "https://base-rpc.publicnode.com",
+    baseSepolia: "https://base-sepolia-rpc.publicnode.com",
   },
   tokens: {
     in: USDC,
