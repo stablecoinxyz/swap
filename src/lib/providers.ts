@@ -1,6 +1,6 @@
 import { CurrentConfig } from "@/config";
 import { Chain, createPublicClient, http, PublicClient } from "viem";
-import { polygon, base } from "viem/chains";
+import { base } from "viem/chains";
 import { entryPoint07Address } from "viem/account-abstraction";
 import { createPimlicoClient } from "permissionless/clients/pimlico";
 
@@ -19,8 +19,6 @@ export enum TransactionState {
 
 export function getScannerUrl(chainId: number, transactionHash: string) {
   switch (chainId) {
-    case polygon.id:
-      return `https://polygonscan.com/tx/${transactionHash}`;
     case base.id:
       return `https://basescan.org/tx/${transactionHash}`;
     default:

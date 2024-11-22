@@ -2,7 +2,6 @@ import {
   computePoolAddress,
   FeeAmount,
   Pool,
-  Tick,
   TICK_SPACINGS,
 } from "@uniswap/v3-sdk";
 import { V3_CORE_FACTORY_ADDRESSES } from "@uniswap/sdk-core";
@@ -13,19 +12,6 @@ import { base } from "viem/chains";
 import { USDC, SBC } from "@/lib/constants";
 import { publicClient } from "@/lib/providers";
 import uniswapV3PoolAbi from "@/lib/abi/uniswapV3Pool.abi";
-import JSBI from "jsbi";
-
-const MIN_TICK = -887272;
-const MAX_TICK = 887272;
-
-function tickToWord(tick: number): number {
-  const tickSpacing = TICK_SPACINGS[FeeAmount.LOWEST];
-  let compressed = Math.floor(tick / tickSpacing);
-  if (tick < 0 && tick % TICK_SPACINGS[FeeAmount.LOWEST] !== 0) {
-    compressed -= 1;
-  }
-  return tick >> 8;
-}
 
 const Q96 = 2 ** 96;
 
@@ -76,8 +62,6 @@ export async function getPoolData(): Promise<[Pool, any, any, number, number]> {
       tokenB: SBC,
     }) as Hex;
 
-    // console.debug("Pool address", address);
-
     const poolContract = getContract({
       address,
       abi: uniswapV3PoolAbi,
@@ -92,80 +76,6 @@ export async function getPoolData(): Promise<[Pool, any, any, number, number]> {
 
     const [sqrtPriceX96, currentTick, _, __, ___, ____, _____] = slot0 as any;
 
-    // // console.debug("SqrtPriceX96", sqrtPriceX96 as bigint);
-    // // console.debug("Tick", currentTick as bigint);
-    // // console.debug("Liquidity", liquidity);
-
-    // // Get all ticks
-    // const minWord = tickToWord(MIN_TICK);
-    // const maxWord = tickToWord(MAX_TICK);
-
-    // let calls: any[] = [];
-    // let wordPosIndices: number[] = [];
-    // for (let i = minWord; i <= maxWord; i++) {
-    //   wordPosIndices.push(i);
-    //   calls.push({
-    //     ...poolContract,
-    //     functionName: "tickBitmap",
-    //     args: [i as any],
-    //   });
-    // }
-
-    // const tickBitmapResults: bigint[] = (
-    //   await publicClient.multicall({ contracts: calls })
-    // ).map((response) => {
-    //   return response.result as bigint;
-    // });
-
-    // // Build array containing indices of all initialized ticks
-    // const tickIndices: number[] = [];
-    // for (let j = 0; j < wordPosIndices.length; j++) {
-    //   const ind = wordPosIndices[j];
-    //   const bitmap = tickBitmapResults[j];
-
-    //   if (bitmap !== 0n) {
-    //     for (let i = 0; i < 256; i++) {
-    //       const bit = 1n;
-    //       const initialized = (bitmap & (bit << BigInt(i))) > 0n;
-    //       if (initialized) {
-    //         const tickIndex = (ind * 256 + i) * TICK_SPACINGS[FeeAmount.LOWEST];
-    //         tickIndices.push(tickIndex);
-    //       }
-    //     }
-    //   }
-    // }
-
-    // // reset calls
-    // calls = [];
-
-    // // Get all tick data by their indices
-    // for (const index of tickIndices) {
-    //   calls.push({
-    //     ...poolContract,
-    //     functionName: "ticks",
-    //     args: [index],
-    //   });
-    // }
-    // const ticksResults = await publicClient.multicall({ contracts: calls });
-
-    // // Liquidity gross and net are at index 0 and 1 respectively
-    // const LIQ_GROSS = 0;
-    // const LIQ_NET = 1;
-    // const allTicks: Tick[] = [];
-    // for (let i = 0; i < tickIndices.length; i++) {
-    //   const index = tickIndices[i];
-    //   const response = ticksResults[i].result;
-
-    //   // console.debug("Tick response", response);
-
-    //   const tick = new Tick({
-    //     index,
-    //     liquidityGross: JSBI.BigInt((response as any)[LIQ_GROSS].toString()),
-    //     liquidityNet: JSBI.BigInt((response as any)[LIQ_NET].toString()),
-    //   });
-    //   allTicks.push(tick);
-    // }
-
     const fullPool = new Pool(
       USDC,
       SBC,
@@ -173,7 +83,6 @@ export async function getPoolData(): Promise<[Pool, any, any, number, number]> {
       sqrtPriceX96.toString(),
       (liquidity as bigint).toString(),
       currentTick,
-      // allTicks,
     );
 
     // Get token amounts
@@ -182,6 +91,7 @@ export async function getPoolData(): Promise<[Pool, any, any, number, number]> {
     // above and below the current tick will return close enough to the
     // actual token amounts. For the sake of this PoC, I won't spend more
     // time on this.
+    // PRs containing a fix for this is welcome!
     const [a, b, token0Amount, token1Amount] = await getTokenAmounts(
       Number(liquidity as bigint),
       Number((slot0 as any)[0].toString()),

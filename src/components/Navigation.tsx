@@ -1,29 +1,21 @@
 "use client";
 
-import { usePathname } from "next/navigation";
+import Link from "next/link";
 
 export function Navigation() {
-  const pathname = usePathname();
-
-  const getLinkClass = (path: string) =>
-    pathname === path
-      ? "text-zinc-700 font-bold"
-      : "text-violet-600 hover:text-violet-900 hover:font-bold";
   return (
     <nav className="fixed">
       <ul className="flex space-x-4">
         <li className="m-4 ml-8">
-          <a href="/" className={getLinkClass("/")}>
+          <Link href="/" className="font-bold">
             Swap
-          </a>
+          </Link>
         </li>
         <li className="m-4">
-          <a href="/masspay" className={getLinkClass("/masspay")}>
+          <Link href="https://masspay.stablecoin.xyz" target="_blank">
             MassPay
-          </a>
+          </Link>
         </li>
-        {/* <li>About</li> */}
-        {/* <li>Contact</li> */}
       </ul>
     </nav>
   );

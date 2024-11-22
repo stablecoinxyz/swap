@@ -5,15 +5,13 @@ import { NumericFormat } from "react-number-format";
 import { useAccount, useBalance, useWalletClient } from "wagmi";
 import { getPoolData } from "@/lib/pool";
 import { USDC, SBC } from "@/lib/constants";
-import { createTrade, executeTrade, executeGaslessTrade } from "@/lib/trading";
+import { createTrade, executeGaslessTrade } from "@/lib/trading";
 import { getScannerUrl } from "@/lib/providers";
 import SwitchIcon from "@/components/SwitchIcon";
 import { CurrentConfig } from "@/config";
 import { ToastAction } from "@/components/ui/toast";
 import { useToast } from "@/hooks/use-toast";
 import { publicClient } from "@/lib/providers";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
 
 import { TransactionReceipt, Hex } from "viem";
 import { base } from "viem/chains";
@@ -28,7 +26,7 @@ export default function Home() {
   }
 
   const [isSwitched, setIsSwitched] = useState(false);
-  const [gasless, setGasless] = useState(true);
+
   const [availableLiquidity0, setAvailableLiquidity0] = useState(0);
   const [availableLiquidity1, setAvailableLiquidity1] = useState(0);
   const [price0, setPrice0] = useState(0);
@@ -57,12 +55,6 @@ export default function Home() {
   useMemo(async () => {
     // get pool liquidity and store it in state
     const [pool, _, __, token0Amount, token1Amount] = await getPoolData();
-    // console.debug("pool", pool);
-
-    // const availableLiquidity = Number(pool.liquidity);
-    // console.debug("Available liquidity", availableLiquidity);
-    // console.debug("token0Amount", token0Amount);
-    // console.debug("token1Amount", token1Amount);
 
     // cache the available liquidity
     setAvailableLiquidity0(token0Amount);
@@ -140,7 +132,7 @@ export default function Home() {
                 duration: 9000,
               });
 
-              const receipt = await doSwap(gasless);
+              const receipt = await doSwap();
 
               if (!receipt || "error" in receipt) {
                 const error = receipt.error || "Please try again later";
@@ -181,6 +173,80 @@ export default function Home() {
     </main>
   );
 
+  function handleSwitch() {
+    setIsSwitched(!isSwitched);
+    resetTradeAmounts();
+  }
+
+  function quoteUsdcToSbc(usdcAmount: string): number {
+    return Number(usdcAmount) * Number(price0);
+  }
+
+  function quoteSbcToUsdc(sbcAmount: string): number {
+    return Number(sbcAmount) * Number(price1);
+  }
+
+  async function doSwap(): Promise<
+    TransactionReceipt | { transactionHash: Hex } | { error: string }
+  > {
+    const { usdcAmount, sbcAmount } = getTradeAmounts();
+
+    const config = CurrentConfig;
+    config.provider = publicClient;
+
+    config.tokens.amountIn = isSwitched
+      ? Number(sbcAmount)
+      : Number(usdcAmount);
+    config.tokens.in = isSwitched ? SBC : USDC;
+    config.tokens.out = isSwitched ? USDC : SBC;
+
+    const trade = await createTrade(config);
+    if (!trade) {
+      return {
+        error: "No trade created",
+      };
+    }
+
+    let response;
+    try {
+      const { userOpHash, txState: status } = await executeGaslessTrade(
+        trade,
+        config,
+      );
+
+      console.debug(
+        `Executed gasless trade: ${status}; Receipt: ${getScannerUrl(base.id, userOpHash)}`,
+      );
+
+      response = { transactionHash: userOpHash as Hex };
+
+      return response;
+    } catch (error) {
+      return {
+        error: "Error executing trade",
+      };
+    }
+  }
+
+  function getTradeAmounts(): { usdcAmount: string; sbcAmount: string } {
+    const usdcInput = document.getElementById("usdcInput") as HTMLInputElement;
+    const sbcInput = document.getElementById("sbcInput") as HTMLInputElement;
+    const usdcAmount = usdcInput ? usdcInput.value.replace(/,/g, "") : "";
+    const sbcAmount = sbcInput ? sbcInput.value.replace(/,/g, "") : "";
+    return { usdcAmount, sbcAmount };
+  }
+
+  function resetTradeAmounts(): void {
+    const usdcInput = document.getElementById("usdcInput") as HTMLInputElement;
+    const sbcInput = document.getElementById("sbcInput") as HTMLInputElement;
+    if (usdcInput) {
+      usdcInput.value = "";
+    }
+    if (sbcInput) {
+      sbcInput.value = "";
+    }
+  }
+
   function Header() {
     return (
       <header className="flex flex-col items-center my-20 md:mb-20">
@@ -202,95 +268,6 @@ export default function Home() {
         </div>
       </header>
     );
-  }
-
-  function handleSwitch() {
-    setIsSwitched(!isSwitched);
-    resetTradeAmounts();
-  }
-
-  async function quoteUsdcToSbc(usdcAmount: string) {
-    return Number(usdcAmount) * Number(price0);
-  }
-
-  async function quoteSbcToUsdc(sbcAmount: string) {
-    return Number(sbcAmount) * Number(price1);
-  }
-
-  async function doSwap(
-    gasless: boolean,
-  ): Promise<
-    TransactionReceipt | { transactionHash: Hex } | { error: string }
-  > {
-    const { usdcAmount, sbcAmount } = getTradeAmounts();
-    // console.debug({ usdcAmount, sbcAmount });
-    const config = CurrentConfig;
-    config.provider = publicClient;
-
-    config.tokens.amountIn = isSwitched
-      ? Number(sbcAmount)
-      : Number(usdcAmount);
-    config.tokens.in = isSwitched ? SBC : USDC;
-    config.tokens.out = isSwitched ? USDC : SBC;
-
-    const trade = await createTrade(config);
-    if (!trade) {
-      return {
-        error: "No trade created",
-      };
-    }
-
-    let response;
-    try {
-      if (gasless) {
-        const { userOpHash, txState: status } = await executeGaslessTrade(
-          trade,
-          config,
-        );
-
-        console.debug(
-          `Executed gasless trade: ${status}; Receipt: ${getScannerUrl(base.id, userOpHash)}`,
-        );
-
-        response = { transactionHash: userOpHash as Hex };
-      } else {
-        const { receipt, txState: status } = await executeTrade(
-          trade,
-          config,
-          CurrentConfig.wallet!,
-        );
-
-        console.debug(
-          `Executed trade: ${status}; Receipt: ${getScannerUrl(base.id, receipt!.transactionHash)}`,
-        );
-
-        response = { transactionHash: receipt!.transactionHash };
-      }
-      return response;
-    } catch (error) {
-      return {
-        error: "Error executing trade",
-      };
-    }
-  }
-
-  function getTradeAmounts() {
-    const usdcInput = document.getElementById("usdcInput") as HTMLInputElement;
-    const sbcInput = document.getElementById("sbcInput") as HTMLInputElement;
-    const usdcAmount = usdcInput ? usdcInput.value.replace(/,/g, "") : "";
-    const sbcAmount = sbcInput ? sbcInput.value.replace(/,/g, "") : "";
-    return { usdcAmount, sbcAmount };
-  }
-
-  function resetTradeAmounts() {
-    const usdcInput = document.getElementById("usdcInput") as HTMLInputElement;
-    const sbcInput = document.getElementById("sbcInput") as HTMLInputElement;
-    if (usdcInput) {
-      usdcInput.value = "";
-    }
-    if (sbcInput) {
-      sbcInput.value = "";
-    }
   }
 
   function Switcher() {
@@ -503,29 +480,5 @@ export default function Home() {
         />
       </div>
     );
-  }
-
-  function GaslessSwitch() {
-    const migratedToUniversalRouter = false;
-    if (!migratedToUniversalRouter) {
-      return null;
-    } else {
-      return (
-        <div className="flex flex-row space-x-2 justify-center content-center ">
-          <Switch
-            className="flex border-zinc-400"
-            id="gasless-switch"
-            checked={gasless}
-            onCheckedChange={() => setGasless(!gasless)}
-          />
-          <Label
-            htmlFor="gasless-switch"
-            className="flex dark:bg-zinc-950 text-zinc-950 dark:text-neutral-100 pt-0.5 text-xs"
-          >
-            <p>Gasless: {gasless ? "ON" : "OFF"}</p>
-          </Label>
-        </div>
-      );
-    }
   }
 }
