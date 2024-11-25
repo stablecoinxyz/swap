@@ -6,7 +6,7 @@ This project is a simple web application that allows users to swap tokens on the
 
 You can view the live demo of the project [here](https://swap.stablecoin.xyz/). You need to be on the Base blockchain.
 
-[[!gasless-swap](./public/docs/gasless-swap.png)](#)
+[![gasless-swap](./public/docs/gasless-swap.png)](https://swap.stablecoin.xyz/)
 
 After connecting your wallet, you can swap between [USDC](https://basescan.org/token/0x833589fcd6edb6e08f4c7c32d4f71b54bda02913#code) and [SBC](https://basescan.org/token/0xfdcC3dd6671eaB0709A4C0f3F53De9a333d80798#code) tokens in either direction.
 
