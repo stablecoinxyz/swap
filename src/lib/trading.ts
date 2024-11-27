@@ -232,6 +232,8 @@ export async function executeGaslessTrade(
       },
     });
 
+    console.log("Smart Account Client", smartAccountClient);
+
     // now transfer the amountIn to the SimpleAccount
     const erc20ContractAbi = new ethers.Interface(erc20Abi);
     const transferData = erc20ContractAbi.encodeFunctionData("transferFrom", [

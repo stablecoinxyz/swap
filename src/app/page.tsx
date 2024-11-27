@@ -12,7 +12,6 @@ import { CurrentConfig } from "@/config";
 import { ToastAction } from "@/components/ui/toast";
 import { useToast } from "@/hooks/use-toast";
 import { publicClient } from "@/lib/providers";
-import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 
 import { TransactionReceipt, Hex } from "viem";
@@ -503,29 +502,5 @@ export default function Home() {
         />
       </div>
     );
-  }
-
-  function GaslessSwitch() {
-    const migratedToUniversalRouter = false;
-    if (!migratedToUniversalRouter) {
-      return null;
-    } else {
-      return (
-        <div className="flex flex-row space-x-2 justify-center content-center ">
-          <Switch
-            className="flex border-zinc-400"
-            id="gasless-switch"
-            checked={gasless}
-            onCheckedChange={() => setGasless(!gasless)}
-          />
-          <Label
-            htmlFor="gasless-switch"
-            className="flex dark:bg-zinc-950 text-zinc-950 dark:text-neutral-100 pt-0.5 text-xs"
-          >
-            <p>Gasless: {gasless ? "ON" : "OFF"}</p>
-          </Label>
-        </div>
-      );
-    }
   }
 }
