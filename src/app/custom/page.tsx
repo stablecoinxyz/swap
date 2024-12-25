@@ -12,6 +12,7 @@ import {
   createPublicClient,
   PublicClient,
   http,
+  parseEther,
 } from "viem";
 import { base, baseSepolia, localhost } from "viem/chains";
 import {
@@ -29,7 +30,7 @@ import { createSmartAccountClient } from "permissionless";
 import { createPimlicoClient } from "permissionless/clients/pimlico";
 
 // import { Capabilities } from "@/components/Capabilities";
-import { SBC, SBC_BASE_SEPOLIA } from "@/lib/constants";
+import { SBC, SBC_BASE_SEPOLIA, SBC_CONTRACT_ADDRESS } from "@/lib/constants";
 import { publicClient } from "@/lib/providers";
 import { CurrentConfig } from "@/config";
 import { paymasterActionsEip7677 } from "@/lib/eip7677";
@@ -50,7 +51,7 @@ export default function CustomPaymasterPage() {
     CurrentConfig.account = account!;
   }
 
-  console.debug("Setting up with Paymaster Server URL", PAYMASTER_SERVER_URL);
+  // console.debug("Setting up with Paymaster Server URL", PAYMASTER_SERVER_URL);
 
   // @DEV: Required for EIP5792Approach
   // const { data: availableCapabilities } = useCapabilities({
@@ -93,7 +94,7 @@ export default function CustomPaymasterPage() {
           <WalletBalanceInfo />
 
           <button className={btnClasses} onClick={buildUserOp}>
-            Send 0.00001 SBC to vitalik.eth
+            Send
           </button>
         </div>
       </div>
@@ -105,9 +106,10 @@ export default function CustomPaymasterPage() {
     const ownerAddress = privateKeyToAccount(
       process.env.NEXT_PUBLIC_LOCAL_PRIVATE_KEY as Hex,
     ).address;
+
     const owner = createWalletClient({
       account: ownerAddress, //walletAddress as Hex,
-      chain: localAA, // baseSepolia,
+      chain: baseSepolia, //localAA
       transport: custom((window as any).ethereum),
     });
     console.debug("Owner Address", owner.account.address);
@@ -177,13 +179,13 @@ export default function CustomPaymasterPage() {
   }
 
   async function MiddlewareApproach(owner: any) {
-    const localPublicClient = createPublicClient({
-      chain: localAA,
-      transport: http(localAA.rpcUrls.default.http[0]),
+    const publicClient = createPublicClient({
+      chain: baseSepolia,
+      transport: http(baseSepolia.rpcUrls.default.http[0]),
     }) as PublicClient;
 
     const simpleAccount = await toSimpleSmartAccount({
-      client: localPublicClient,
+      client: publicClient,
       owner: owner,
       entryPoint: {
         address: entryPoint07Address,
@@ -221,14 +223,14 @@ export default function CustomPaymasterPage() {
     // create the smart account client with owner's wallet and paymasterClient
     const smartAccountClient = createSmartAccountClient({
       account: simpleAccount,
-      chain: localAA,
-      bundlerTransport: http(process.env.NEXT_PUBLIC_BUNDLER_URL!),
+      chain: baseSepolia,
+      bundlerTransport: http(BUNDLER_URL),
       paymaster: pmClient,
       userOperation: {
         estimateFeesPerGas: async () => {
           return {
-            maxFeePerGas: 10n,
-            maxPriorityFeePerGas: 10n,
+            maxFeePerGas: 1350577n,
+            maxPriorityFeePerGas: 1350000n,
           };
         },
       },
@@ -236,17 +238,17 @@ export default function CustomPaymasterPage() {
 
     console.debug("Smart Account Client", smartAccountClient);
 
-    // build simple user operation
+    // build simple user operation (send 1 wei to vitalik.eth)
     const txHash = await smartAccountClient.sendTransaction({
       calls: [
         {
-          to: "0xd8da6bf26964af9d7eed9e03e53415d37aa96045", // vitalik.eth
-          value: 0n,
-          data: "0x1234678",
+          to: "0x70997970C51812dc3A010C7d01b50e0d17dc79C8", // anvil 2
+          value: parseEther("0.1"),
+          data: "0x7",
         },
       ],
       paymasterContext: {
-        policyId: "jello",
+        policyId: "seven",
       },
     });
 
