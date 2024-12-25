@@ -1,15 +1,15 @@
 import { Token, TradeType } from "@uniswap/sdk-core";
 import { Trade } from "@uniswap/v3-sdk";
-import { ethers } from "ethers";
+import { formatUnits, parseUnits } from "viem";
 
 const MAX_DECIMALS = 4;
 
 export function fromReadableAmount(amount: number, decimals: number): BigInt {
-  return ethers.parseUnits(amount.toString(), decimals);
+  return parseUnits(amount.toString(), decimals);
 }
 
-export function toReadableAmount(rawAmount: number, decimals: number): string {
-  return ethers.formatUnits(rawAmount, decimals).slice(0, MAX_DECIMALS);
+export function toReadableAmount(rawAmount: bigint, decimals: number): string {
+  return formatUnits(rawAmount, decimals).slice(0, MAX_DECIMALS);
 }
 
 export function displayTrade(trade: Trade<Token, Token, TradeType>): string {

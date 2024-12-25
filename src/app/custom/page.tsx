@@ -23,7 +23,7 @@ import {
   paymasterActions,
   createPaymasterClient,
 } from "viem/account-abstraction";
-// import { ethers } from "ethers";
+
 import { toSimpleSmartAccount } from "permissionless/accounts";
 import { createSmartAccountClient } from "permissionless";
 import { createPimlicoClient } from "permissionless/clients/pimlico";
@@ -289,7 +289,7 @@ export default function CustomPaymasterPage() {
   // }
 }
 
-export const localAA = defineChain({
+const localAA = defineChain({
   id: 31337,
   name: "local",
   nativeCurrency: {

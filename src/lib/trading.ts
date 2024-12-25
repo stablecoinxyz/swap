@@ -15,7 +15,6 @@ import {
   SwapRouter,
   Trade,
 } from "@uniswap/v3-sdk";
-import { ethers } from "ethers";
 import JSBI from "jsbi";
 
 import swapRouterAbi from "@/lib/abi/swapRouter.abi";
@@ -235,17 +234,20 @@ export async function executeGaslessTrade(
     console.log("Smart Account Client", smartAccountClient);
 
     // now transfer the amountIn to the SimpleAccount
-    const erc20ContractAbi = new ethers.Interface(erc20Abi);
-    const transferData = erc20ContractAbi.encodeFunctionData("transferFrom", [
-      walletAddress,
-      senderAddress,
-      amountIn,
-    ]) as Hex;
-    // encode the approval transaction
-    const approveData = erc20ContractAbi.encodeFunctionData("approve", [
-      SWAP_ROUTER_02_ADDRESSES(base.id),
-      amountIn,
-    ]);
+    const transferData = encodeFunctionData({
+      abi: erc20Abi,
+      functionName: "transferFrom",
+      args: [walletAddress, senderAddress, BigInt(amountIn.toString())],
+    });
+
+    const approveData = encodeFunctionData({
+      abi: erc20Abi,
+      functionName: "approve",
+      args: [
+        SWAP_ROUTER_02_ADDRESSES(base.id) as Hex,
+        BigInt(amountIn.toString()),
+      ],
+    });
 
     // encode the swap transaction
     const options: SwapOptions = {
@@ -321,16 +323,11 @@ export async function executeGaslessTrade(
       const { r, s, v } = parseSignature(signature);
 
       // encode the permit transaction calldata
-      const erc20PermitContractAbi = new ethers.Interface(erc20PermitAbi);
-      const permitData = erc20PermitContractAbi.encodeFunctionData("permit", [
-        walletAddress,
-        senderAddress,
-        amountIn,
-        deadline,
-        v,
-        r,
-        s,
-      ]) as Hex;
+      const permitData = encodeFunctionData({
+        abi: erc20PermitAbi,
+        functionName: "permit",
+        args: [walletAddress, senderAddress, amountIn, deadline, v, r, s],
+      });
 
       // prepend to the calls array
       calls.unshift({
@@ -397,19 +394,19 @@ async function prepareMassPay(txs: { to: string; value: number }[]) {
   // calculate tx values as BigInts using decimal 18
   const txnBigInts = txs.map((tx) => {
     return {
-      to: tx.to,
+      to: tx.to as Hex,
       value: BigInt(fromReadableAmount(tx.value, 18).toString()),
     };
   });
   console.debug(owner.account.address, txs, txnBigInts);
 
   const calls = txnBigInts.map((tx) => {
-    const erc20ContractAbi = new ethers.Interface(erc20Abi);
-    const transferData = erc20ContractAbi.encodeFunctionData("transferFrom", [
-      owner.account.address as Hex,
-      tx.to,
-      tx.value,
-    ]) as Hex;
+    const transferData = encodeFunctionData({
+      abi: erc20Abi,
+      functionName: "transferFrom",
+      args: [owner.account.address, tx.to, tx.value],
+    });
+
     return {
       from: owner.account.address as Hex,
       to: SBC.address as Hex,
@@ -432,16 +429,19 @@ async function prepareMassPay(txs: { to: string; value: number }[]) {
   const { r, s, v } = parseSignature(signature);
 
   // encode the permit transaction calldata
-  const erc20PermitContractAbi = new ethers.Interface(erc20PermitAbi);
-  const permitData = erc20PermitContractAbi.encodeFunctionData("permit", [
-    CurrentConfig.account!.address as Hex,
-    senderAddress,
-    totalValue,
-    deadline,
-    v,
-    r,
-    s,
-  ]) as Hex;
+  const permitData = encodeFunctionData({
+    abi: erc20PermitAbi,
+    functionName: "permit",
+    args: [
+      CurrentConfig.account!.address as Hex,
+      senderAddress,
+      totalValue,
+      deadline,
+      v,
+      r,
+      s,
+    ],
+  });
 
   // prepend to the calls array
   calls.unshift({
