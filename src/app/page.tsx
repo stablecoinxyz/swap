@@ -1,38 +1,22 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
-import { NumericFormat } from "react-number-format";
 import { useAccount, useBalance, useWalletClient } from "wagmi";
-import { getPoolData } from "@/lib/pool";
+import { ConnectWallet } from "@/components/ConnectWallet";
 import { USDC, SBC } from "@/lib/constants";
-import { createTrade, executeGaslessTrade } from "@/lib/trading";
-import { getScannerUrl } from "@/lib/providers";
-import SwitchIcon from "@/components/SwitchIcon";
-import { CurrentConfig } from "@/config";
-import { ToastAction } from "@/components/ui/toast";
-import { useToast } from "@/hooks/use-toast";
-import { publicClient } from "@/lib/providers";
 
-import { TransactionReceipt, Hex } from "viem";
-import { base } from "viem/chains";
+import { CurrentConfig } from "@/config";
+import { SwapCard } from "@/components/SwapCard";
+import { Hex } from "viem";
+import Image from "next/image";
 
 export default function Home() {
   const account = useAccount();
   const { address, isConnected, isReconnecting } = account;
-  const { data: wallet, isFetched, isRefetching } = useWalletClient();
+  const { data: wallet, isFetched } = useWalletClient();
   if (isFetched && isConnected) {
     CurrentConfig.wallet = wallet!;
     CurrentConfig.account = account!;
   }
-
-  const [isSwitched, setIsSwitched] = useState(false);
-
-  const [availableLiquidity0, setAvailableLiquidity0] = useState(0);
-  const [availableLiquidity1, setAvailableLiquidity1] = useState(0);
-  const [price0, setPrice0] = useState(0);
-  const [price1, setPrice1] = useState(0);
-
-  const { toast } = useToast();
 
   const {
     data: usdcBalance,
@@ -52,432 +36,130 @@ export default function Home() {
     token: SBC.address as Hex,
   });
 
-  useMemo(async () => {
-    // get pool liquidity and store it in state
-    const [pool, _, __, token0Amount, token1Amount] = await getPoolData();
-
-    // cache the available liquidity
-    setAvailableLiquidity0(token0Amount);
-    setAvailableLiquidity1(token1Amount);
-
-    // cache the prices
-    setPrice0(Number(pool.token0Price.toSignificant()));
-    setPrice1(Number(pool.token1Price.toSignificant()));
-  }, []);
-
   return (
-    <main className="px-4 pb-10 min-h-[100vh] flex items-top justify-center container max-w-screen-lg mx-auto">
-      <div className="w-1/2">
+    <main className="px-4 pb-10 min-h-[100vh] min-w-[600] flex items-top justify-center container max-w-screen-lg mx-auto">
+      <div className="w-3/5 min-w-[540px]">
         <Header />
 
-        {isSwitched ? (
-          <div className="w-full">
-            <SbcContainer />
-            <Switcher />
-            <UsdcContainer />
-          </div>
-        ) : (
-          <div className="w-full">
-            <UsdcContainer />
-            <Switcher />
-            <SbcContainer />
-          </div>
-        )}
+        <div className="mx-auto min-w-[360px]">
+          <WalletCard />
 
-        <div className="flex justify-center mt-8">
-          <button
-            type="button"
-            className="px-10 py-3 rounded-lg dark:bg-white bg-zinc-950 dark:text-zinc-950 text-neutral-100  hover:font-extrabold disabled:font-normal disabled:cursor-not-allowed disabled:opacity-50"
-            disabled={
-              !isFetched || !isConnected || isReconnecting || isRefetching
-            }
-            onClick={async () => {
-              const { usdcAmount, sbcAmount } = getTradeAmounts();
-              if (!usdcAmount && !sbcAmount) {
-                toast({
-                  title: "No amount entered",
-                  description: `Please enter an amount to swap`,
-                  duration: 3000,
-                });
-                return;
-              }
-              if (!address) {
-                toast({
-                  title: "No account found",
-                  description: `Please connect your wallet to perform the swap`,
-                  duration: 3000,
-                });
-                return;
-              }
+          <SwapCard
+            isFetched={isFetched}
+            isConnected={isConnected}
+            isReconnecting={isReconnecting}
+            isUsdcLoading={isUsdcLoading}
+            isSbcLoading={isSbcLoading}
+            address={address}
+            sbcBalance={sbcBalance}
+            usdcBalance={usdcBalance}
+          />
 
-              const tradeAmount = isSwitched
-                ? Number(sbcAmount.replace(/,/g, ""))
-                : Number(usdcAmount.replace(/,/g, ""));
-              console.debug({ tradeAmount });
-              if (
-                tradeAmount > availableLiquidity0 ||
-                tradeAmount > availableLiquidity1
-              ) {
-                toast({
-                  title: "Not enough liquidity available",
-                  description: `Please swap a smaller amount`,
-                  duration: 3000,
-                });
-                return;
-              }
-
-              toast({
-                title: "Performing Swap",
-                description: `Please wait while we process your transaction...`,
-                duration: 9000,
-              });
-
-              const receipt = await doSwap();
-
-              if (!receipt || "error" in receipt) {
-                const error = receipt.error || "Please try again later";
-                toast({
-                  title: "Transaction Failed",
-                  description: `😢 ${error}`,
-                  duration: 9000,
-                });
-
-                return;
-              } else if (
-                receipt &&
-                !("error" in receipt) &&
-                "transactionHash" in receipt
-              ) {
-                toast({
-                  title: "Transaction Sent",
-                  action: (
-                    <ToastAction altText="View on BaseScan">
-                      View Status
-                    </ToastAction>
-                  ),
-                  description: `🎉 Check your transaction status 👉🏻`,
-                  duration: 9000,
-                  onClick: () => {
-                    window.open(
-                      getScannerUrl(base.id, receipt!.transactionHash),
-                    );
-                  },
-                });
-              }
-            }}
-          >
-            Swap
-          </button>
+          <Disclaimer />
         </div>
       </div>
     </main>
   );
 
-  function handleSwitch() {
-    setIsSwitched(!isSwitched);
-    resetTradeAmounts();
-  }
-
-  function quoteUsdcToSbc(usdcAmount: string): number {
-    return Number(usdcAmount) * Number(price0);
-  }
-
-  function quoteSbcToUsdc(sbcAmount: string): number {
-    return Number(sbcAmount) * Number(price1);
-  }
-
-  async function doSwap(): Promise<
-    TransactionReceipt | { transactionHash: Hex } | { error: string }
-  > {
-    const { usdcAmount, sbcAmount } = getTradeAmounts();
-
-    const config = CurrentConfig;
-    config.provider = publicClient;
-
-    config.tokens.amountIn = isSwitched
-      ? Number(sbcAmount)
-      : Number(usdcAmount);
-    config.tokens.in = isSwitched ? SBC : USDC;
-    config.tokens.out = isSwitched ? USDC : SBC;
-
-    const trade = await createTrade(config);
-    if (!trade) {
-      return {
-        error: "No trade created",
-      };
-    }
-
-    let response;
-    try {
-      const { userOpHash, txState: status } = await executeGaslessTrade(
-        trade,
-        config,
-      );
-
-      console.debug(
-        `Executed gasless trade: ${status}; Receipt: ${getScannerUrl(base.id, userOpHash)}`,
-      );
-
-      response = { transactionHash: userOpHash as Hex };
-
-      return response;
-    } catch (error) {
-      return {
-        error: "Error executing trade",
-      };
-    }
-  }
-
-  function getTradeAmounts(): { usdcAmount: string; sbcAmount: string } {
-    const usdcInput = document.getElementById("usdcInput") as HTMLInputElement;
-    const sbcInput = document.getElementById("sbcInput") as HTMLInputElement;
-    const usdcAmount = usdcInput ? usdcInput.value.replace(/,/g, "") : "";
-    const sbcAmount = sbcInput ? sbcInput.value.replace(/,/g, "") : "";
-    return { usdcAmount, sbcAmount };
-  }
-
-  function resetTradeAmounts(): void {
-    const usdcInput = document.getElementById("usdcInput") as HTMLInputElement;
-    const sbcInput = document.getElementById("sbcInput") as HTMLInputElement;
-    if (usdcInput) {
-      usdcInput.value = "";
-    }
-    if (sbcInput) {
-      sbcInput.value = "";
-    }
-  }
-
   function Header() {
     return (
       <header className="flex flex-col items-center my-20 md:mb-20">
-        <h1 className="text-2xl font-semibold tracking-tighter">
-          Stable Coin | Gasless Swap
-        </h1>
-
-        <div className="text-base mt-2">
-          A gasless swap of USDC &lt;&mdash;&gt; SBC
-          <div className="text-center">
-            <a
-              href="https://stablecoin.xyz"
-              target="_blank"
-              className="text-violet-700 hover:font-semibold"
-            >
-              stablecoin.xyz
-            </a>
-          </div>
+        <Image src="/swapIcon.svg" width={42} height={42} alt="swap" />
+        <h1 className="my-4 text-3xl font-semibold tracking-tighter">Swap</h1>
+        <div className="w-[360px] flex flex-col items-center mt-2 text-center">
+          Swap USDC and SBC with zero gas fees, seamlessly powered by
+          Stablecoin.xyz.
         </div>
       </header>
     );
   }
 
-  function Switcher() {
+  function Disclaimer() {
     return (
-      <div className="flex justify-center my-4">
-        <button
-          onClick={handleSwitch}
-          className="px-2 py-2 rounded flex items-center justify-center"
-          aria-label="Switch"
-        >
-          <SwitchIcon />
-        </button>
+      <div className="text-center mt-4 text-xs text-gray-500">
+        <div>
+          <strong>Disclaimer:</strong> This tool is provided &quot;as-is&quot;
+          without warranty. The value you receive is determined by the current
+          market rate in the Uniswap pool and may be subject to slippage or
+          fees. Transactions are final and cannot be reversed. Please
+          double-check all amounts and details before proceeding to ensure
+          accuracy. Stablecoin.xyz is not liable for any losses resulting from
+          the use of this tool.
+        </div>
       </div>
     );
   }
 
-  function SbcContainer() {
-    async function updateUsdcValue(input: HTMLInputElement) {
-      const usdcInput = document.getElementById(
-        "usdcInput",
-      ) as HTMLInputElement;
-      const usdcOut = await quoteSbcToUsdc(input.value);
-      if (isSwitched && usdcInput) {
-        usdcInput.value = input.value ? usdcOut.toFixed(3) : "";
-      }
-    }
-
+  function WalletCard() {
     return (
-      <div className="flex flex-col border border-zinc-800 text-zinc-950 bg-zinc-50 p-4 rounded-lg w-full relative">
-        <div className="flex flex-row justify-between">
-          <h2 className="text-lg font-semibold mb-2">SBC</h2>
-          <div className="flex flex-col">
-            <span className="flex font-bold text-sm">
-              Balance:{" "}
-              {!isSbcLoading &&
-                sbcBalance &&
-                Number(sbcBalance.formatted).toFixed(3)}{" "}
-            </span>
-            <span className="flex text-sm w-full justify-end mt-1">
-              {isSwitched && (
-                <span className="flex">
-                  <button
-                    className="flex text-xs mr-2"
-                    onClick={() => {
-                      const input = document.getElementById(
-                        "sbcInput",
-                      ) as HTMLInputElement;
-                      if (input) {
-                        input.value = sbcBalance
-                          ? (Number(sbcBalance.formatted) / 2).toFixed(3)
-                          : "0";
-                        // trigger onInput event to update usdc input
-                        input.dispatchEvent(
-                          new Event("input", {
-                            bubbles: true,
-                            cancelable: true,
-                          }),
-                        );
-                      }
-                    }}
-                  >
-                    [50%]
-                  </button>
-                  <button
-                    className="flex text-xs"
-                    onClick={() => {
-                      const input = document.getElementById(
-                        "sbcInput",
-                      ) as HTMLInputElement;
-                      if (input) {
-                        input.value = sbcBalance
-                          ? Number(sbcBalance.formatted).toFixed(3)
-                          : "0";
-                        // trigger onInput event to update usdc input
-                        input.dispatchEvent(
-                          new Event("input", {
-                            bubbles: true,
-                            cancelable: true,
-                          }),
-                        );
-                      }
-                    }}
-                  >
-                    [max]
-                  </button>
-                </span>
-              )}
-            </span>
+      <div className=" bg-card rounded w-auto">
+        <div className="flex flex-col relative items-start p-6">
+          <h2 className="text-xl font-medium">Your wallet</h2>
+          {isConnected && isFetched ? (
+            <p className="text-sm text-mutedForeground">
+              Wallet is now linked and ready for transactions
+            </p>
+          ) : (
+            <p className="text-sm text-mutedForeground">
+              Link your wallet on the Base network to start swapping
+            </p>
+          )}
+          {wallet && <BalanceTable />}
+          <div className="ml-auto absolute top-[3.8rem] right-6">
+            <ConnectWallet />
           </div>
         </div>
-        <NumericFormat
-          id="sbcInput"
-          type="text"
-          className="mt-2 p-3 text-lg border border-zinc-600 text-zinc-950 bg-zinc-50 font-extrabold rounded w-full text-right"
-          placeholder="Enter amount"
-          thousandSeparator={true}
-          onInput={async (e: any) => {
-            const input = e.target as HTMLInputElement;
-            input.value = input.value.replace(/[^0-9.]/g, "");
-
-            const value = input.value.replace(/,/g, "");
-            const balance = sbcBalance ? Number(sbcBalance.formatted) : 0;
-            if (
-              parseFloat(value) > balance ||
-              parseFloat(value) > availableLiquidity0 ||
-              parseFloat(value) > availableLiquidity1
-            ) {
-              input.value = balance.toFixed(3);
-            }
-            await updateUsdcValue(input);
-          }}
-        />
       </div>
     );
   }
 
-  function UsdcContainer() {
-    async function updateSbcValue(input: HTMLInputElement) {
-      const sbcInput = document.getElementById("sbcInput") as HTMLInputElement;
-      const sbcOut = await quoteUsdcToSbc(input.value);
-      if (!isSwitched && sbcInput) {
-        sbcInput.value = input.value ? sbcOut.toFixed(3) : "";
-      }
-    }
-
+  function BalanceTable() {
     return (
-      <div className="flex flex-col border border-zinc-800 text-zinc-950 bg-zinc-50 p-4 rounded-lg w-full relative">
-        <div className="flex flex-row justify-between">
-          <h2 className="flex text-lg font-semibold mb-2">USDC</h2>
-          <div className="flex flex-col">
-            <span className="flex font-bold text-sm">
-              Balance:{" "}
-              {!isUsdcLoading &&
-                usdcBalance &&
-                Number(usdcBalance.formatted).toFixed(3)}
-            </span>
-            <span className="flex text-sm w-full justify-end mt-1">
-              {!isSwitched && (
-                <span className="flex">
-                  <button
-                    className="flex text-xs mr-2"
-                    onClick={() => {
-                      const input = document.getElementById(
-                        "usdcInput",
-                      ) as HTMLInputElement;
-                      if (input) {
-                        input.value = usdcBalance
-                          ? (Number(usdcBalance.formatted) / 2).toFixed(3)
-                          : "0";
-                        // trigger onInput event to update sbc input
-                        input.dispatchEvent(
-                          new Event("input", {
-                            bubbles: true,
-                            cancelable: true,
-                          }),
-                        );
-                      }
-                    }}
-                  >
-                    [50%]
-                  </button>
-                  <button
-                    className="flex text-xs"
-                    onClick={() => {
-                      const input = document.getElementById(
-                        "usdcInput",
-                      ) as HTMLInputElement;
-                      if (input) {
-                        input.value = usdcBalance
-                          ? Number(usdcBalance.formatted).toFixed(3)
-                          : "0";
-                        // trigger onInput event to update sbc input
-                        input.dispatchEvent(
-                          new Event("input", {
-                            bubbles: true,
-                            cancelable: true,
-                          }),
-                        );
-                      }
-                    }}
-                  >
-                    [max]
-                  </button>
-                </span>
-              )}
-            </span>
-          </div>
-        </div>
-
-        <NumericFormat
-          id="usdcInput"
-          type="text"
-          className="mt-2 p-3 text-lg border border-zinc-600 text-zinc-950 bg-zinc-50 font-extrabold rounded w-full text-right"
-          placeholder="Enter amount"
-          thousandSeparator={true}
-          onInput={async (e: any) => {
-            const input = e.target as HTMLInputElement;
-            const value = input.value.replace(/[^0-9.]/g, "");
-
-            const balance = usdcBalance ? Number(usdcBalance.formatted) : 0;
-            if (
-              parseFloat(value) > balance ||
-              parseFloat(value) > availableLiquidity0 ||
-              parseFloat(value) > availableLiquidity1
-            ) {
-              input.value = balance.toFixed(3);
-            }
-            await updateSbcValue(input);
-          }}
-        />
+      <div className="flex flex-col items-center mt-4 w-full">
+        <table className="text-base text-mutedForeground bg-mutedBackground border rounded-lg border-border">
+          <thead>
+            <tr className="text-mutedForeground">
+              <th className="px-4 py-3 w-5/6 text-left">Currency</th>
+              <th className="px-4 py-2 w-1/6 text-center">Balance</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr className="text-mutedForeground">
+              <td className="px-4 pb-4 w-5/6 text-lg text-foreground flex items-start space-x-2">
+                <Image
+                  className=""
+                  src="/sbclogo.svg"
+                  width={24}
+                  height={24}
+                  alt="SBC"
+                />
+                <span className="ml-2">SBC</span>
+              </td>
+              <td className="px-4 pb-4 text-lg text-foreground text-center">
+                {sbcBalance
+                  ? Number(sbcBalance!.formatted).toFixed(3)
+                  : "0.000"}
+              </td>
+            </tr>
+            <tr className="text-mutedForeground">
+              <td className="px-4 pb-4 w-5/6 text-lg text-foreground flex items-start space-x-2">
+                <Image
+                  className=""
+                  src="/usdclogo.svg"
+                  width={24}
+                  height={24}
+                  alt="USDC"
+                />
+                <span className="ml-2">USDC</span>
+              </td>
+              <td className="px-4 pb-4 text-lg text-foreground text-center">
+                {usdcBalance
+                  ? Number(usdcBalance!.formatted).toFixed(3)
+                  : "0.000"}
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     );
   }

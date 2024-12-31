@@ -50,7 +50,7 @@ export const Web3Provider: React.FC<Web3ProviderProps> = ({ children }) => {
   return (
     <WagmiProvider config={config}>
       <QueryClientProvider client={queryClient}>
-        <ConnectKitProvider>{children}</ConnectKitProvider>
+        <ConnectKitProvider theme="midnight">{children}</ConnectKitProvider>
       </QueryClientProvider>
     </WagmiProvider>
   );
