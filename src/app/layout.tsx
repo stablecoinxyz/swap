@@ -28,7 +28,7 @@ export default function RootLayout({
 }
 
 export const metadata: Metadata = {
-  title: "Stable Coin | Gasless Swap",
-  description: "",
-  keywords: "",
+  title: "SBC Swap",
+  description: "Swap USDC for SBC without gas fees",
+  keywords: "SBC, Stable Coin, stablecoins, swap, gasless, crypto, blockchain",
 };
