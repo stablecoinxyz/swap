@@ -31,4 +31,30 @@ export const metadata: Metadata = {
   title: "SBC Swap",
   description: "Swap USDC for SBC without gas fees",
   keywords: "SBC, Stable Coin, stablecoins, swap, gasless, crypto, blockchain",
+  twitter: {
+    card: "summary",
+    site: "@stablecoinxyz",
+    creator: "@stablecoinxyz",
+    title: "SBC Swap",
+    description: "Swap USDC and SBC without gas fees",
+    images: [
+      {
+        url: "https://swap.stablecoin.xyz/sbc-16x9.png",
+        alt: "SBC Swap",
+      },
+    ],
+  },
+  openGraph: {
+    type: "website",
+    url: "https://swap.stablecoin.xyz",
+    siteName: "SBC Swap",
+    title: "SBC Swap",
+    description: "Swap USDC and SBC without gas fees",
+    images: [
+      {
+        url: "https://swap.stablecoin.xyz/sbc-16x9.png",
+        alt: "SBC Swap",
+      },
+    ],
+  },
 };
