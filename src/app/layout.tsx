@@ -29,7 +29,7 @@ export default function RootLayout({
 
 export const metadata: Metadata = {
   title: "SBC Swap",
-  description: "Swap USDC for SBC without gas fees",
+  description: "Swap USDC and SBC without gas fees",
   keywords: "SBC, Stable Coin, stablecoins, swap, gasless, crypto, blockchain",
   twitter: {
     card: "summary",
