@@ -67,8 +67,7 @@ export default function Home() {
         <Image src="/swapIcon.svg" width={42} height={42} alt="swap" />
         <h1 className="my-4 text-3xl font-semibold tracking-tighter">Swap</h1>
         <div className="w-[360px] flex flex-col items-center mt-2 text-center">
-          Swap USDC and SBC with zero gas fees, seamlessly powered by
-          Stablecoin.xyz.
+          Swap USDC and SBC with zero gas fees, seamlessly powered by Uniswap.
         </div>
       </header>
     );
