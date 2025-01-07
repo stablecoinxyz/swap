@@ -39,7 +39,7 @@ export const metadata: Metadata = {
     description: "Swap USDC and SBC without gas fees",
     images: [
       {
-        url: "https://swap.stablecoin.xyz/sbc-16x9.png",
+        url: "https://swap.stablecoin.xyz/SwapOpengraph.png",
         alt: "SBC Swap",
       },
     ],
@@ -52,7 +52,7 @@ export const metadata: Metadata = {
     description: "Swap USDC and SBC without gas fees",
     images: [
       {
-        url: "https://swap.stablecoin.xyz/sbc-16x9.png",
+        url: "https://swap.stablecoin.xyz/SwapOpengraph.png",
         alt: "SBC Swap",
       },
     ],
