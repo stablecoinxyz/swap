@@ -1,4 +1,4 @@
-# gasless-swap
+# swap
 
 This project is a simple web application that allows users to swap tokens on the Base blockchain without having to pay for gas fees. It uses the [Pimlico](https://pimlico.io/) Paymaster and its Account Abstraction SDK to execute the swaps and [WalletConnect](https://reown.com/) to connect to the user's wallet.
 
