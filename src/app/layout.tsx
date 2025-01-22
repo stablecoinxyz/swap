@@ -57,4 +57,5 @@ export const metadata: Metadata = {
       },
     ],
   },
+  metadataBase: new URL("https://swap.stablecoin.xyz"),
 };
