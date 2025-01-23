@@ -127,7 +127,7 @@ export default function Home() {
               <td className="px-4 pb-4 w-5/6 text-lg text-foreground flex items-start space-x-2">
                 <Image
                   className=""
-                  src="/sbclogo.svg"
+                  src="/nav-sbc-logo.svg"
                   width={24}
                   height={24}
                   alt="SBC"
