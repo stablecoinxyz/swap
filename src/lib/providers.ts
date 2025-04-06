@@ -3,10 +3,13 @@ import { Chain, createPublicClient, http, PublicClient } from "viem";
 import { base } from "viem/chains";
 import { entryPoint07Address } from "viem/account-abstraction";
 import { createPimlicoClient } from "permissionless/clients/pimlico";
+import { createPaymasterClient } from "viem/account-abstraction";
 
 export const publicClient = createPublicClient({
   chain: base,
-  transport: http(CurrentConfig.rpc.base),
+  transport: http(process.env.NEXT_PUBLIC_ALCHEMY_BASE_ENDPOINT as string, {
+    timeout: 240_000,
+  }),
 }) as PublicClient;
 
 export enum TransactionState {
@@ -41,3 +44,8 @@ export const pimlicoClient = createPimlicoClient({
     version: "0.7",
   },
 });
+
+export const sbcPaymasterClient = createPaymasterClient({
+  transport: http(process.env.NEXT_PUBLIC_PAYMASTER_SERVICE_URL!),
+});
+

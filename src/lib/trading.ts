@@ -43,7 +43,7 @@ import {
   TransactionState,
   publicClient,
   pimlicoClient,
-  pimlicoUrlForChain,
+  sbcPaymasterClient,
 } from "@/lib/providers";
 import { fromReadableAmount } from "@/lib/extras";
 
@@ -131,8 +131,8 @@ export async function executeGaslessTrade(
     const smartAccountClient = createSmartAccountClient({
       account: simpleAccount,
       chain: base,
-      bundlerTransport: http(pimlicoUrlForChain(base)),
-      paymaster: pimlicoClient,
+      bundlerTransport: http(process.env.NEXT_PUBLIC_BUNDLER_URL!),
+      paymaster: sbcPaymasterClient,
       userOperation: {
         estimateFeesPerGas: async () => {
           return (await pimlicoClient.getUserOperationGasPrice()).fast;
@@ -256,18 +256,21 @@ export async function executeGaslessTrade(
       });
     }
 
-    // send the batch call transaction to the SimpleAccount,
-    // with the paymaster context set to the base gas credits policy
-    const userOpHash = await smartAccountClient.sendTransaction({
+    // send the batch call transaction to the SimpleAccount
+    const userOpHash = await smartAccountClient.sendUserOperation({
       calls,
-      paymasterContext: {
-        sponsorshipPolicyId: process.env.NEXT_PUBLIC_SPONSORSHIP_POLICY_ID,
-      },
+    });
+
+    const receipt = await smartAccountClient.waitForUserOperationReceipt({
+      hash: userOpHash,
+      pollingInterval: 1000,
+      timeout: 100000,
+      retryCount: 10,
     });
 
     return {
       txState: TransactionState.Sent,
-      userOpHash,
+      userOpHash: receipt.userOpHash,
     };
   } catch (e) {
     console.error(e);
@@ -384,7 +387,7 @@ async function getPermitSignature(
     const domain = {
       name: token.name!,
       version: getDomainVersion(token.name!, base.id),
-      chainId: base.id, // polygon.id,
+      chainId: base.id,
       verifyingContract: token.address as Hex,
     };
     console.debug("Domain", domain);
