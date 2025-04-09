@@ -30,7 +30,7 @@ import {
 } from "viem";
 
 import { base } from "viem/chains";
-import { entryPoint07Address } from "viem/account-abstraction";
+import { entryPoint07Address, WaitForUserOperationReceiptTimeoutError } from "viem/account-abstraction";
 
 import JSBI from "jsbi";
 
@@ -264,8 +264,24 @@ export async function executeGaslessTrade(
     const receipt = await smartAccountClient.waitForUserOperationReceipt({
       hash: userOpHash,
       pollingInterval: 1000,
-      timeout: 100000,
-      retryCount: 10,
+      timeout: 7000,
+      retryCount: 7,
+    })
+    .catch((e) => {
+      // if timeout but the userOpHash is still valid, return the userOpHash anyway
+      if (e instanceof WaitForUserOperationReceiptTimeoutError && userOpHash.startsWith("0x")) {
+        return {
+          txState: TransactionState.Sent,
+          userOpHash: userOpHash,
+        };
+      } else {
+        console.error(e);
+        return {
+          txState: TransactionState.Failed,
+          userOpHash: userOpHash,
+        };
+      }
+      
     });
 
     return {
