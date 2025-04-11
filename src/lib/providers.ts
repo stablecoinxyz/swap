@@ -47,6 +47,6 @@ export const pimlicoClient = createPimlicoClient({
 });
 
 export const sbcPaymasterClient = createPaymasterClient({
-  transport: http(process.env.NEXT_PUBLIC_PAYMASTER_SERVICE_URL!),
+  transport: http(process.env.NEXT_PUBLIC_AA_BASE_URL!),
 });
 

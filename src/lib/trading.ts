@@ -131,7 +131,7 @@ export async function executeGaslessTrade(
     const smartAccountClient = createSmartAccountClient({
       account: simpleAccount,
       chain: base,
-      bundlerTransport: http(process.env.NEXT_PUBLIC_BUNDLER_URL!),
+      bundlerTransport: http(process.env.NEXT_PUBLIC_AA_BASE_URL!),
       paymaster: sbcPaymasterClient,
       userOperation: {
         estimateFeesPerGas: async () => {
