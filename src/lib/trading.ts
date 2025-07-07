@@ -49,7 +49,6 @@ import {
   sbcPaymasterClient,
 } from "@/lib/providers";
 import { fromReadableAmount } from "@/lib/extras";
-import { getSmartAccount, ACCOUNT_TYPE } from "@/lib/account-utils";
 
 import { toSimpleSmartAccount } from "permissionless/accounts";
 import { createSmartAccountClient } from "permissionless";
