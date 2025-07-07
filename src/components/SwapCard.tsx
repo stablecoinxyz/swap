@@ -3,7 +3,7 @@ import { memo, useState, useMemo } from "react";
 import Image from "next/image";
 import { getPoolData } from "@/lib/pool";
 import { NumericFormat } from "react-number-format";
-import { createTrade, executeGaslessTrade } from "@/lib/trading";
+import { createTrade, execute7702GaslessTrade, executeGaslessTrade } from "@/lib/trading";
 import { getScannerUrl } from "@/lib/providers";
 import { useToast } from "@/hooks/use-toast";
 import { publicClient } from "@/lib/providers";
@@ -12,6 +12,7 @@ import { TransactionReceipt, Hex } from "viem";
 import { base } from "viem/chains";
 import { USDC, SBC } from "@/lib/constants";
 import { CurrentConfig } from "@/config";
+import { KernelAccountClient } from "@zerodev/sdk";
 
 function getTradeAmounts(): { usdcAmount: string; sbcAmount: string } {
   const usdcInput = document.getElementById("usdcInput") as HTMLInputElement;
@@ -42,6 +43,10 @@ const SwapCard = memo(
     address,
     sbcBalance,
     usdcBalance,
+    use7702,
+    sessionKeyAddress,
+    sessionKernelClient,
+    disabled,
   }: {
     isFetched: boolean;
     isConnected: boolean;
@@ -65,6 +70,10 @@ const SwapCard = memo(
           value: bigint;
         }
       | undefined;
+    use7702: boolean;
+    sessionKeyAddress: Hex | undefined;
+    sessionKernelClient: KernelAccountClient | null;
+    disabled?: boolean;
   }) => {
     const [isSwitched, setIsSwitched] = useState(false);
     const [availableLiquidity0, setAvailableLiquidity0] = useState(0);
@@ -238,6 +247,7 @@ const SwapCard = memo(
               }
               await updateUsdcValue(input);
             }}
+            disabled={disabled}
           />
           <div
             id="showSbcBalance"
@@ -377,6 +387,7 @@ const SwapCard = memo(
               }
               await updateSbcValue(input);
             }}
+            disabled={disabled}
           />
           <div
             id="showUsdcBalance"
@@ -410,18 +421,34 @@ const SwapCard = memo(
       }
 
       let response;
+
       try {
-        const { userOpHash, txState: status } = await executeGaslessTrade(
-          trade,
-          config,
-        );
+        if (use7702) {
+          const { userOpHash, txState: status } = await execute7702GaslessTrade(
+            trade,
+            config,
+            sessionKeyAddress!,
+            sessionKernelClient!,
+          );
 
-        console.debug(
-          `Executed gasless trade: ${status}; Receipt: ${getScannerUrl(base.id, userOpHash)}`,
-        );
+          console.debug(
+            `Executed 7702 gasless trade: ${status}; Receipt: ${getScannerUrl(base.id, userOpHash)}`,
+          );
 
-        response = { transactionHash: userOpHash as Hex };
-
+          response = { transactionHash: userOpHash as Hex };
+        } else {
+          const { userOpHash, txState: status } = await executeGaslessTrade(
+            trade,
+            config,
+          );
+  
+          console.debug(
+            `Executed gasless trade: ${status}; Receipt: ${getScannerUrl(base.id, userOpHash)}`,
+          );
+  
+          response = { transactionHash: userOpHash as Hex };
+        }
+        
         return response;
       } catch (error) {
         return {
@@ -452,7 +479,7 @@ const SwapCard = memo(
               <button
                 type="button"
                 className="px-10 py-3 rounded-lg bg-primary hover:bg-accent text-white w-full"
-                disabled={!isFetched || !isConnected || isReconnecting}
+                disabled={!isFetched || !isConnected || isReconnecting || disabled}
                 onClick={async () => {
                   const { usdcAmount, sbcAmount } = getTradeAmounts();
                   if (!usdcAmount && !sbcAmount) {
