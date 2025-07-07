@@ -1,6 +1,7 @@
 import {
   Currency,
   CurrencyAmount,
+  MaxUint256,
   Percent,
   QUOTER_ADDRESSES,
   SWAP_ROUTER_02_ADDRESSES,
@@ -27,10 +28,12 @@ import {
   parseSignature,
   WalletClient,
   parseAbiParameters,
+  walletActions,
 } from "viem";
 
 import { base } from "viem/chains";
 import { entryPoint07Address, WaitForUserOperationReceiptTimeoutError } from "viem/account-abstraction";
+import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 
 import JSBI from "jsbi";
 
@@ -49,6 +52,22 @@ import { fromReadableAmount } from "@/lib/extras";
 
 import { toSimpleSmartAccount } from "permissionless/accounts";
 import { createSmartAccountClient } from "permissionless";
+
+import { deserializePermissionAccount, serializePermissionAccount, toPermissionValidator } from "@zerodev/permissions";
+import { CallPolicyVersion, ParamCondition, toCallPolicy } from "@zerodev/permissions/policies";
+import { toECDSASigner, toWebAuthnSigner } from "@zerodev/permissions/signers";
+import {
+  addressToEmptyAccount,
+  createKernelAccount,
+  createKernelAccountClient,
+  CreateKernelAccountReturnType,
+  createZeroDevPaymasterClient,
+  KernelAccountClient,
+} from "@zerodev/sdk";
+import { KERNEL_V3_3 } from "@zerodev/sdk/constants";
+import { toTimestampPolicy } from "@zerodev/permissions/policies"
+
+import { useLocalStorage } from "usehooks-ts";
 
 export type TokenTrade = Trade<Token, Token, TradeType>;
 
@@ -294,6 +313,134 @@ export async function executeGaslessTrade(
   }
 }
 
+export async function execute7702GaslessTrade(
+  trade: TokenTrade,
+  config: TradeConfig,
+  sessionKeyAddress: Hex,
+  sessionKernelClient: KernelAccountClient,
+): Promise<{
+  txState: TransactionState;
+  userOpHash: string;
+}> {
+  console.debug("Executing 7702 gasless trade");
+
+  try {
+    if (!sessionKernelClient) {
+      throw new Error("Session kernel client not found");
+    }
+
+    if (!config.account!.address) {
+      throw new Error("Cannot execute a trade without a connected wallet");
+    }
+    const walletAddress = config.account!.address;
+
+    // We'll reuse the sessionKernelClient passed in from the dApp.
+    const senderAddress = sessionKernelClient.account!.address;
+    console.debug("Session Kernel Sender", senderAddress);
+
+    const smartAccountClient = sessionKernelClient;
+
+    const amountIn = fromReadableAmount(
+      config.tokens.amountIn,
+      config.tokens.in.decimals as number,
+    );
+
+    // now transfer the amountIn to the SimpleAccount
+    const transferData = encodeFunctionData({
+      abi: erc20Abi,
+      functionName: "transferFrom",
+      args: [walletAddress as Hex, senderAddress as Hex, amountIn],
+    });
+
+    // encode the approval transaction
+    const approveData = encodeFunctionData({
+      abi: erc20Abi,
+      functionName: "approve",
+      // args: [SWAP_ROUTER_02_ADDRESSES(base.id) as Hex, amountIn],
+      args: [SWAP_ROUTER_02_ADDRESSES(base.id) as Hex, BigInt(MaxUint256.toString())],
+    });
+
+    // 20 minutes from the current Unix time
+    const deadline = Math.floor(Date.now() / 1000) + 60 * 20;
+
+    // encode the swap transaction
+    const options: SwapOptions = {
+      // 50 bips, or 0.50%
+      slippageTolerance: new Percent(50, 10_000),
+      // 20 minutes from the current Unix time
+      deadline,
+      // the recipient of the output token
+      recipient: walletAddress,
+    };
+
+    const methodParameters = SwapRouter.swapCallParameters([trade], options);
+
+    const swapData_ = methodParameters.calldata as Hex;
+    const { functionName, args } = decodeFunctionData({
+      abi: swapRouterAbi,
+      data: swapData_,
+    });
+
+    delete (args as any)[0]["deadline"];
+
+    // re-encode the swap transaction without the `deadline` argument
+    const swapData = encodeFunctionData({
+      abi: swapRouter2Abi,
+      functionName,
+      args,
+    });
+
+    // package the calls together in the correct order
+    const calls = [
+      {
+        to: config.tokens.in.address as Hex,
+        data: transferData,
+      },
+      // Removed approve call for 7702 session key trade
+      {
+        to: SWAP_ROUTER_02_ADDRESSES(base.id) as Hex,
+        data: swapData,
+      },
+    ];
+
+    console.debug(
+      `Checking token approval for ${config.tokens.in.symbol}; amount ${config.tokens.amountIn}; sender address: ${senderAddress}`,
+    );
+
+    try {
+      const userOpHash = await smartAccountClient.sendUserOperation({ calls });
+      const receipt = await smartAccountClient.waitForUserOperationReceipt({
+        hash: userOpHash,
+        pollingInterval: 1000,
+        timeout: 7000,
+        retryCount: 7,
+      });
+      return {
+        txState: TransactionState.Sent,
+        userOpHash: receipt.userOpHash,
+      };
+    } catch (e) {
+      const msg = (e as Error)?.message || "";
+      if (
+        msg.includes("AA22") &&
+        (msg.toLowerCase().includes("expired") || msg.toLowerCase().includes("not due"))
+      ) {
+        throw { code: "SESSION_KEY_EXPIRED", original: e };
+      }
+      throw e;
+    }
+  } catch (e) {
+    const msg = (e as Error)?.message || "";
+    if (
+      msg.includes("AA22") &&
+      (msg.toLowerCase().includes("expired") || msg.toLowerCase().includes("not due"))
+    ) {
+      throw { code: "SESSION_KEY_EXPIRED", original: e };
+    }
+    throw e;
+  }
+}
+
 async function getOutputQuote(route: Route<Currency, Currency>) {
   const provider = publicClient;
 
@@ -357,39 +504,39 @@ async function checkTokenApproval(
   }
 }
 
-async function getTokenTransferApproval(
-  config: TradeConfig,
-  wallet: WalletClient,
-): Promise<string> {
-  const address = config.account!.address;
-  if (!address) {
-    console.error("No address provided");
-    return TransactionState.Failed;
-  }
+// async function getTokenTransferApproval(
+//   config: TradeConfig,
+//   wallet: WalletClient,
+// ): Promise<string> {
+//   const address = config.account!.address;
+//   if (!address) {
+//     console.error("No address provided");
+//     return TransactionState.Failed;
+//   }
 
-  try {
-    const hash = await wallet.writeContract({
-      address: config.tokens.in.address as Hex,
-      abi: erc20Abi,
-      functionName: "approve",
-      account: config.account!.address as Hex,
-      chain: base, // polygon,
-      args: [
-        SWAP_ROUTER_02_ADDRESSES(base.id) as Hex,
-        BigInt(
-          fromReadableAmount(
-            config.tokens.amountIn,
-            config.tokens.in.decimals,
-          ).toString(),
-        ),
-      ],
-    });
-    return hash;
-  } catch (e) {
-    console.error(e);
-    return TransactionState.Failed;
-  }
-}
+//   try {
+//     const hash = await wallet.writeContract({
+//       address: config.tokens.in.address as Hex,
+//       abi: erc20Abi,
+//       functionName: "approve",
+//       account: config.account!.address as Hex,
+//       chain: base, // polygon,
+//       args: [
+//         SWAP_ROUTER_02_ADDRESSES(base.id) as Hex,
+//         BigInt(
+//           fromReadableAmount(
+//             config.tokens.amountIn,
+//             config.tokens.in.decimals,
+//           ).toString(),
+//         ),
+//       ],
+//     });
+//     return hash;
+//   } catch (e) {
+//     console.error(e);
+//     return TransactionState.Failed;
+//   }
+// }
 
 async function getPermitSignature(
   wallet: WalletClient,

@@ -2,7 +2,7 @@ import { Token } from "@uniswap/sdk-core";
 import { FeeAmount } from "@uniswap/v3-sdk";
 
 import { USDC, SBC } from "@/lib/constants";
-import { PublicClient, WalletClient } from "viem";
+import { JsonRpcAccount, PublicClient, WalletClient } from "viem";
 import { UseAccountReturnType } from "wagmi";
 export interface TradeConfig {
   rpc: {
@@ -17,7 +17,7 @@ export interface TradeConfig {
   };
   provider: PublicClient | null;
   wallet: WalletClient | null;
-  account: UseAccountReturnType | null;
+  account: UseAccountReturnType | JsonRpcAccount | null;
 }
 
 export const CurrentConfig: TradeConfig = {

@@ -23,8 +23,8 @@ export enum TransactionState {
 export function getScannerUrl(chainId: number, transactionHash: string) {
   switch (chainId) {
     case base.id:
-      // return `https://basescan.org/tx/${transactionHash}`;
-      return `https://base.blockscout.com/op/${transactionHash}`;
+      return `https://basescan.org/tx/${transactionHash}`;
+      // return `https://base.blockscout.com/op/${transactionHash}`;
     default:
       return `chainId ${chainId} not supported`;
   }
