@@ -1,5 +1,5 @@
-import { useAccount, useDisconnect, useEnsAvatar, useEnsName } from "wagmi";
 import Image from "next/image";
+import { useAccount, useDisconnect, useEnsAvatar, useEnsName } from "wagmi";
 
 export function Account() {
   const { address } = useAccount();

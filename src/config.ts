@@ -1,9 +1,9 @@
 import { Token } from "@uniswap/sdk-core";
 import { FeeAmount } from "@uniswap/v3-sdk";
-
-import { USDC, SBC } from "@/lib/constants";
 import { JsonRpcAccount, PublicClient, WalletClient } from "viem";
 import { UseAccountReturnType } from "wagmi";
+
+import { SBC,USDC } from "@/lib/constants";
 export interface TradeConfig {
   rpc: {
     local: string;

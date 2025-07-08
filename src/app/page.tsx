@@ -1,30 +1,24 @@
 "use client";
 
-import React, { useEffect, useState, useRef } from "react";
-import { useAccount, useBalance, useWalletClient } from "wagmi";
-import { ConnectWallet } from "@/components/ConnectWallet";
-import { USDC, SBC } from "@/lib/constants";
-import { pimlicoClient, publicClient, sbcPaymasterClient } from "@/lib/providers";
-
-import { CurrentConfig } from "@/config";
-import { SwapCard } from "@/components/SwapCard";
-import { Account, Hex, http, JsonRpcAccount, parseGwei, parseSignature, parseUnits, WalletClient } from "viem";
-import Image from "next/image";
-import { generatePrivateKey, privateKeyToAccount, toAccount } from "viem/accounts";
-
-import { CreateKernelAccountReturnType, KernelAccountClient, createKernelAccount, createKernelAccountClient, createZeroDevPaymasterClient } from "@zerodev/sdk";
-import { toECDSASigner } from "@zerodev/permissions/signers";
-import { deserializePermissionAccount, serializePermissionAccount, toPermissionValidator } from "@zerodev/permissions";
-import { KERNEL_V3_3, KernelVersionToAddressesMap, getEntryPoint } from "@zerodev/sdk/constants";
-
-import { useLocalStorage } from "usehooks-ts";
-import { toTimestampPolicy, CallPolicyVersion, ParamCondition, toCallPolicy } from "@zerodev/permissions/policies";
-import { base } from "viem/chains";
-import { erc20Abi, zeroAddress } from "viem";
 import { MaxUint256, SWAP_ROUTER_02_ADDRESSES } from "@uniswap/sdk-core";
-import swapRouter2Abi from "@/lib/abi/swapRouter2.abi";
-import { Signer } from "@zerodev/sdk/types";
-import { encodeFunctionData } from "viem";
+import { deserializePermissionAccount, serializePermissionAccount, toPermissionValidator } from "@zerodev/permissions";
+import { toTimestampPolicy } from "@zerodev/permissions/policies";
+import { toECDSASigner } from "@zerodev/permissions/signers";
+import { createKernelAccount, createKernelAccountClient, CreateKernelAccountReturnType, createZeroDevPaymasterClient,KernelAccountClient } from "@zerodev/sdk";
+import { getEntryPoint,KERNEL_V3_3, KernelVersionToAddressesMap } from "@zerodev/sdk/constants";
+import Image from "next/image";
+import React, { useEffect, useState } from "react";
+import { useLocalStorage } from "usehooks-ts";
+import { encodeFunctionData,erc20Abi, Hex, http, parseSignature, WalletClient } from "viem";
+import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
+import { base } from "viem/chains";
+import { useAccount, useBalance, useWalletClient } from "wagmi";
+
+import { ConnectWallet } from "@/components/ConnectWallet";
+import { SwapCard } from "@/components/SwapCard";
+import { CurrentConfig } from "@/config";
+import { SBC,USDC } from "@/lib/constants";
+import { pimlicoClient, publicClient, sbcPaymasterClient } from "@/lib/providers";
 
 const ZERODEV_APP_ID = process.env.NEXT_PUBLIC_ZERODEV_APP_ID;
 const ZERODEV_BASE_URL = `https://rpc.zerodev.app/api/v3/${ZERODEV_APP_ID}/chain/8453`;
@@ -64,27 +58,21 @@ export default function Home() {
 
   const [sessionKernelClient, setSessionKernelClient] = useState<KernelAccountClient | null>(null);
 
+  // Local storage for session key and validUntil timestamp
   const [serialisedSessionKey, setSerialisedSessionKey] = useLocalStorage<string | null>(
     `serialisedSessionKey-master:${CurrentConfig?.account?.address}`,
     null,
   );
-  // Store validUntil in local storage
   const [sessionKeyValidUntil, setSessionKeyValidUntil] = useLocalStorage<number | null>(
     `sessionKeyValidUntil-master:${CurrentConfig?.account?.address}`,
     null,
   );
 
   const [setupStep, setSetupStep] = useState(0); // 0: none, 1: authorized, 2: session key, 3: approved
-  // const [timer, setTimer] = useState(120); // 2 minutes in seconds
-  // const [timerActive, setTimerActive] = useState(false);
-  // const timerRef = useRef<number | null>(null);
-
-  const [createSessionKeyStatus, setCreateSessionKeyStatus] = useState<'idle' | 'creating' | 'created'>('idle');
 
   // Remove combined button logic, restore two-step flow
   const [actionStatus, setActionStatus] = useState<'idle' | 'creatingSessionKey' | 'sessionKeyCreated' | 'approving' | 'approved'>('idle');
   const [sessionKeyMessage, setSessionKeyMessage] = useState<string | null>(null);
-  const [showTooltip, setShowTooltip] = useState(false);
   const [show7702Tooltip, setShow7702Tooltip] = useState(false);
 
   const [needsApproval, setNeedsApproval] = useState<boolean>(true);
@@ -159,7 +147,7 @@ export default function Home() {
       ];
       const results = await Promise.all(approvalTxs);
       console.log('Approve Tokens: EOA approvals complete', results);
-      // Wait for both transactions to be mined
+
       await Promise.all(results.map(tx => publicClient.waitForTransactionReceipt({ hash: tx as `0x${string}` })));
       // Re-check approval after mining
       if (address && sessionAccountAddress) {
@@ -637,6 +625,23 @@ export default function Home() {
                             {new Date(sessionKeyValidUntil * 1000).toLocaleString()}
                           </span>
                         </span>
+                        <button
+                          className="ml-4 px-3 py-1 border border-gray-400 text-gray-700 bg-gray-100 rounded hover:bg-gray-200 transition-colors text-sm font-medium"
+                          onClick={() => {
+                            setSerialisedSessionKey(null);
+                            setSessionKernelClient(null);
+                            setSessionAccountAddress(null);
+                            setSessionKeyAddress(undefined);
+                            setUse7702(false);
+                            setSetupStep(0);
+                            setSessionKeyValidUntil(null);
+                            setActionStatus('idle');
+                            setSessionKeyMessage(null);
+                            setTradeError(null);
+                          }}
+                        >
+                          Revoke
+                        </button>
                       </span>
                     </div>
                   </div>

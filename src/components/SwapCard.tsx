@@ -1,18 +1,19 @@
 "use client";
-import { memo, useState, useMemo } from "react";
-import Image from "next/image";
-import { getPoolData } from "@/lib/pool";
-import { NumericFormat } from "react-number-format";
-import { createTrade, execute7702GaslessTrade, executeGaslessTrade } from "@/lib/trading";
-import { getScannerUrl } from "@/lib/providers";
-import { useToast } from "@/hooks/use-toast";
-import { publicClient } from "@/lib/providers";
-import { ToastAction } from "@/components/ui/toast";
-import { TransactionReceipt, Hex } from "viem";
-import { base } from "viem/chains";
-import { USDC, SBC } from "@/lib/constants";
-import { CurrentConfig } from "@/config";
 import { KernelAccountClient } from "@zerodev/sdk";
+import Image from "next/image";
+import { memo, useMemo, useState } from "react";
+import { NumericFormat } from "react-number-format";
+import { Hex, TransactionReceipt } from "viem";
+import { base } from "viem/chains";
+
+import { ToastAction } from "@/components/ui/toast";
+import { CurrentConfig } from "@/config";
+import { useToast } from "@/hooks/use-toast";
+import { SBC, USDC } from "@/lib/constants";
+import { getPoolData } from "@/lib/pool";
+import { getScannerUrl } from "@/lib/providers";
+import { publicClient } from "@/lib/providers";
+import { createTrade, execute7702GaslessTrade, executeGaslessTrade } from "@/lib/trading";
 
 function getTradeAmounts(): { usdcAmount: string; sbcAmount: string } {
   const usdcInput = document.getElementById("usdcInput") as HTMLInputElement;
@@ -55,21 +56,21 @@ const SwapCard = memo(
     isSbcLoading: boolean;
     address: Hex | undefined;
     sbcBalance:
-      | {
-          decimals: number;
-          formatted: string;
-          symbol: string;
-          value: bigint;
-        }
-      | undefined;
+    | {
+      decimals: number;
+      formatted: string;
+      symbol: string;
+      value: bigint;
+    }
+    | undefined;
     usdcBalance:
-      | {
-          decimals: number;
-          formatted: string;
-          symbol: string;
-          value: bigint;
-        }
-      | undefined;
+    | {
+      decimals: number;
+      formatted: string;
+      symbol: string;
+      value: bigint;
+    }
+    | undefined;
     use7702: boolean;
     sessionKeyAddress: Hex | undefined;
     sessionKernelClient: KernelAccountClient | null;
@@ -441,14 +442,14 @@ const SwapCard = memo(
             trade,
             config,
           );
-  
+
           console.debug(
             `Executed gasless trade: ${status}; Receipt: ${getScannerUrl(base.id, userOpHash)}`,
           );
-  
+
           response = { transactionHash: userOpHash as Hex };
         }
-        
+
         return response;
       } catch (error) {
         return {

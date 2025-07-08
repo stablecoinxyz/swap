@@ -1,10 +1,9 @@
 "use client";
 
-import { WagmiProvider, createConfig, http, fallback } from "wagmi";
-import { base } from "wagmi/chains";
-
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ConnectKitProvider, getDefaultConfig } from "connectkit";
+import { createConfig, fallback, http, WagmiProvider } from "wagmi";
+import { base } from "wagmi/chains";
 
 const config = createConfig(
   getDefaultConfig({

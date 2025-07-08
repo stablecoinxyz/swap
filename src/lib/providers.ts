@@ -1,9 +1,10 @@
-import { CurrentConfig } from "@/config";
-import { Chain, createPublicClient, http, PublicClient } from "viem";
-import { base } from "viem/chains";
-import { entryPoint07Address } from "viem/account-abstraction";
 import { createPimlicoClient } from "permissionless/clients/pimlico";
+import { Chain, createPublicClient, http, PublicClient } from "viem";
+import { entryPoint07Address } from "viem/account-abstraction";
 import { createPaymasterClient } from "viem/account-abstraction";
+import { base } from "viem/chains";
+
+import { CurrentConfig } from "@/config";
 
 export const publicClient = createPublicClient({
   chain: base,

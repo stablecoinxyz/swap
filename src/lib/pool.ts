@@ -1,17 +1,16 @@
+import { V3_CORE_FACTORY_ADDRESSES } from "@uniswap/sdk-core";
 import {
   computePoolAddress,
   FeeAmount,
   Pool,
   TICK_SPACINGS,
 } from "@uniswap/v3-sdk";
-import { V3_CORE_FACTORY_ADDRESSES } from "@uniswap/sdk-core";
-
 import { getContract, Hex } from "viem";
 import { base } from "viem/chains";
 
-import { USDC, SBC } from "@/lib/constants";
-import { publicClient } from "@/lib/providers";
 import uniswapV3PoolAbi from "@/lib/abi/uniswapV3Pool.abi";
+import { SBC,USDC } from "@/lib/constants";
+import { publicClient } from "@/lib/providers";
 
 const Q96 = 2 ** 96;
 

@@ -1,9 +1,11 @@
+import "./globals.css";
+
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
-import "./globals.css";
-import { Web3Provider } from "@/components/Web3Provider";
-import { Toaster } from "@/components/ui/toaster";
+
 import { Navigation } from "@/components/Navigation";
+import { Toaster } from "@/components/ui/toaster";
+import { Web3Provider } from "@/components/Web3Provider";
 
 const inter = Inter({ subsets: ["latin"] });
 

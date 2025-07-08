@@ -8,7 +8,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "format": "prettier --write \"**/*.{(j|t)s,(j|t)sx,json,md}\""
+    "format": "prettier --write \"**/*.{(j|t)s,(j|t)sx,json,md}\"",
+    "prepare": "husky install"
   },
   "dependencies": {
     "@openzeppelin/contracts": "^5.0.2",
@@ -49,10 +50,18 @@
     "autoprefixer": "^10.0.1",
     "eslint": "^8",
     "eslint-config-next": "14.1.0",
+    "eslint-plugin-simple-import-sort": "^12.1.1",
+    "husky": "^8.0.0",
+    "lint-staged": "^16.1.2",
     "postcss": "^8",
     "prettier": "^3.3.3",
     "tailwindcss": "^3.3.0",
     "typescript": "^5.0.4"
+  },
+  "lint-staged": {
+    "src/**/*.{js,jsx,ts,tsx}": [
+      "eslint --fix"
+    ]
   },
   "overrides": {
     "ox": "0.8.1"
