@@ -281,22 +281,22 @@ export async function executeGaslessTrade(
       timeout: 7000,
       retryCount: 7,
     })
-    .catch((e) => {
-      // if timeout but the userOpHash is still valid, return the userOpHash anyway
-      if (e instanceof WaitForUserOperationReceiptTimeoutError && userOpHash.startsWith("0x")) {
-        return {
-          txState: TransactionState.Sent,
-          userOpHash: userOpHash,
-        };
-      } else {
-        console.error(e);
-        return {
-          txState: TransactionState.Failed,
-          userOpHash: userOpHash,
-        };
-      }
-      
-    });
+      .catch((e) => {
+        // if timeout but the userOpHash is still valid, return the userOpHash anyway
+        if (e instanceof WaitForUserOperationReceiptTimeoutError && userOpHash.startsWith("0x")) {
+          return {
+            txState: TransactionState.Sent,
+            userOpHash: userOpHash,
+          };
+        } else {
+          console.error(e);
+          return {
+            txState: TransactionState.Failed,
+            userOpHash: userOpHash,
+          };
+        }
+
+      });
 
     return {
       txState: TransactionState.Sent,
@@ -347,13 +347,13 @@ export async function execute7702GaslessTrade(
       args: [walletAddress as Hex, senderAddress as Hex, amountIn],
     });
 
-    // encode the approval transaction
-    const approveData = encodeFunctionData({
-      abi: erc20Abi,
-      functionName: "approve",
-      // args: [SWAP_ROUTER_02_ADDRESSES(base.id) as Hex, amountIn],
-      args: [SWAP_ROUTER_02_ADDRESSES(base.id) as Hex, BigInt(MaxUint256.toString())],
-    });
+    // encode the approval transaction -- REMOVED FOR 7702 Session Key Trade
+    // const approveData = encodeFunctionData({
+    //   abi: erc20Abi,
+    //   functionName: "approve",
+    //   // args: [SWAP_ROUTER_02_ADDRESSES(base.id) as Hex, amountIn],
+    //   args: [SWAP_ROUTER_02_ADDRESSES(base.id) as Hex, BigInt(MaxUint256.toString())],
+    // });
 
     // 20 minutes from the current Unix time
     const deadline = Math.floor(Date.now() / 1000) + 60 * 20;

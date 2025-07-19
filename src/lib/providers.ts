@@ -4,8 +4,6 @@ import { entryPoint07Address } from "viem/account-abstraction";
 import { createPaymasterClient } from "viem/account-abstraction";
 import { base } from "viem/chains";
 
-import { CurrentConfig } from "@/config";
-
 export const publicClient = createPublicClient({
   chain: base,
   transport: http(process.env.NEXT_PUBLIC_ALCHEMY_BASE_ENDPOINT as string, {
@@ -25,7 +23,7 @@ export function getScannerUrl(chainId: number, transactionHash: string) {
   switch (chainId) {
     case base.id:
       return `https://basescan.org/tx/${transactionHash}`;
-      // return `https://base.blockscout.com/op/${transactionHash}`;
+    // return `https://base.blockscout.com/op/${transactionHash}`;
     default:
       return `chainId ${chainId} not supported`;
   }

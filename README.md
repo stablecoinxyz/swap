@@ -1,10 +1,10 @@
 # swap
 
-This project is a simple web application that allows users to swap tokens on the Base blockchain without having to pay for gas fees. It uses the [Pimlico](https://pimlico.io/) Paymaster and its Account Abstraction SDK to execute the swaps and [WalletConnect](https://reown.com/) to connect to the user's wallet.
+This project is a simple web application that allows users to swap tokens on the Base blockchain without having to pay for gas fees. It uses an open-sourced Paymaster from [SBC](https://stablecoin.xyz) and common libraries like [`viem`](https://viem.sh/) to execute the swaps via the [Uniswap V3 Router](https://docs.uniswap.org/contracts/v3/reference/periphery/SwapRouter) and [WalletConnect](https://reown.com/) to connect to the user's wallet.
 
-## Demo
+## Usage
 
-You can view the live demo of the project [here](https://swap.stablecoin.xyz/). You need to be on the Base blockchain.
+You can see it live [here](https://swap.stablecoin.xyz/). You need to be on the Base blockchain.
 
 [![gasless-swap](./public/docs/gasless-swap.png)](https://swap.stablecoin.xyz/)
 
@@ -14,11 +14,36 @@ You don't need any ETH to pay for gas fees as our Paymaster will cover the fees 
 
 ## Environment Variables
 
-To run this project, you will need to add the following environment variables to your .env file:
+To run this project locally, you'll need to set up the following environment variables in your `.env` file:
 
-- `NEXT_PUBLIC_PIMLICO_API_KEY` - refer to the [Pimlico dashboard](https://dashboard.pimlico.io/)
-- `NEXT_PUBLIC_SPONSORSHIP_POLICY_ID` - create a policy from the [Pimlico dashboard](https://dashboard.pimlico.io/) and get its ID
-- `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` - refer to the [WalletConnect dashboard](https://cloud.reown.com/)
+### Required API Keys
+
+```bash
+# Get an API key from https://dashboard.pimlico.io/
+NEXT_PUBLIC_PIMLICO_API_KEY=""
+
+# Get a project ID from https://cloud.reown.com/ (WalletConnect)
+NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=""
+
+# Get an Alchemy RPC endpoint for the Base network from https://alchemy.com/
+NEXT_PUBLIC_ALCHEMY_BASE_ENDPOINT=""
+```
+
+### Account Abstraction Setup
+
+```bash
+# 1. Get an API Key for the SBC paymaster from the SBC Dashboard - https://dashboard.stablecoin.xyz/
+# 2. Replace YOUR_SBC_API_KEY with your API Key from the SBC Dashboard
+NEXT_PUBLIC_AA_BASE_URL="https://aa-proxy.up.railway.app/rpc/v1/base/YOUR_SBC_API_KEY"
+```
+
+### EIP-7702 Setup (Optional)
+
+```bash
+# 1. Get your ZeroDev App ID from https://dashboard.zerodev.app/projects (Make sure Base is enabled)
+# 2. Replace YOUR_ZERODEV_APP_ID with your ZeroDev app ID
+NEXT_PUBLIC_ZERODEV_APP_ID="YOUR_ZERODEV_APP_ID"
+```
 
 ## Run locally
 
