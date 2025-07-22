@@ -4,12 +4,12 @@ import { MaxUint256, SWAP_ROUTER_02_ADDRESSES } from "@uniswap/sdk-core";
 import { deserializePermissionAccount, serializePermissionAccount, toPermissionValidator } from "@zerodev/permissions";
 import { toTimestampPolicy } from "@zerodev/permissions/policies";
 import { toECDSASigner } from "@zerodev/permissions/signers";
-import { createKernelAccount, createKernelAccountClient, CreateKernelAccountReturnType, createZeroDevPaymasterClient,KernelAccountClient } from "@zerodev/sdk";
-import { getEntryPoint,KERNEL_V3_3, KernelVersionToAddressesMap } from "@zerodev/sdk/constants";
+import { createKernelAccount, createKernelAccountClient, CreateKernelAccountReturnType, createZeroDevPaymasterClient, KernelAccountClient } from "@zerodev/sdk";
+import { getEntryPoint, KERNEL_V3_3, KernelVersionToAddressesMap } from "@zerodev/sdk/constants";
 import Image from "next/image";
 import React, { useEffect, useState } from "react";
 import { useLocalStorage } from "usehooks-ts";
-import { encodeFunctionData,erc20Abi, Hex, http, parseSignature, WalletClient } from "viem";
+import { encodeFunctionData, erc20Abi, Hex, http, parseSignature, WalletClient } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { base } from "viem/chains";
 import { useAccount, useBalance, useWalletClient } from "wagmi";
@@ -17,7 +17,7 @@ import { useAccount, useBalance, useWalletClient } from "wagmi";
 import { ConnectWallet } from "@/components/ConnectWallet";
 import { SwapCard } from "@/components/SwapCard";
 import { CurrentConfig } from "@/config";
-import { SBC,USDC } from "@/lib/constants";
+import { SBC, USDC } from "@/lib/constants";
 import { pimlicoClient, publicClient, sbcPaymasterClient } from "@/lib/providers";
 
 const ZERODEV_APP_ID = process.env.NEXT_PUBLIC_ZERODEV_APP_ID;
@@ -292,7 +292,7 @@ export default function Home() {
 
     setSessionKernelClient(kernelClient);
   };
-  
+
   const createKernelClients = async () => {
     const wallet = CurrentConfig.wallet as WalletClient;
     if (!wallet || !wallet.account) {
@@ -300,7 +300,7 @@ export default function Home() {
     }
     console.log("wallet", wallet);
     console.log("wallet.account", wallet.account);
-    
+
     // Step 1: Manually create and sign EIP-7702 authorization (wagmi doesn't support signAuthorization)
     const nonce = 0n;
     const typedData = {
@@ -334,7 +334,7 @@ export default function Home() {
     // Parse signature into authorization format
     const { r, s, v } = parseSignature(signature);
     const yParity = v !== undefined ? Number(BigInt(v as any) % 2n) : 0;
-    
+
     const authorization = {
       address: kernelAddresses.accountImplementationAddress,
       chainId: base.id,
@@ -369,7 +369,11 @@ export default function Home() {
       }),
       userOperation: {
         estimateFeesPerGas: async () => {
-          return (await pimlicoClient.getUserOperationGasPrice()).fast;
+          const gasPrice = await publicClient.getGasPrice();
+          return {
+            maxFeePerGas: gasPrice,
+            maxPriorityFeePerGas: gasPrice * 2n,
+          };
         },
       },
     });
@@ -602,62 +606,62 @@ export default function Home() {
         </div>
         {/* 7702 Setup UI - only visible if use7702 is true */}
         {use7702 && (
-            <div className="flex flex-col items-center my-4">
-              {/* Only show 'Create Session Key' button if there is no valid session key */}
-              {(!serialisedSessionKey || !sessionKeyValidUntil || Math.floor(Date.now() / 1000) >= sessionKeyValidUntil) && (actionStatus === 'idle' || actionStatus === 'creatingSessionKey') && (
-                <button
-                  className={`px-4 py-2 rounded mb-4 ${actionStatus !== 'idle' || !sessionAccountAddress || !use7702 ? 'bg-gray-300 text-gray-500' : 'bg-blue-600 text-white'}`}
-                  onClick={handleCreateSessionKey}
-                  disabled={actionStatus !== 'idle' || !sessionAccountAddress || !use7702}
-                >
-                  {actionStatus === 'creatingSessionKey' ? 'Creating Session Key ...' : 'Create Session Key'}
-                </button>
-              )}
-              {serialisedSessionKey && sessionKeyValidUntil && Math.floor(Date.now() / 1000) < sessionKeyValidUntil && (
-                <>
-                  <div className="flex flex-col items-center mt-1">
-                    <div className="flex items-center justify-center">
-                      <span className="inline-flex items-center px-4 py-2 rounded-lg border border-green-400 bg-card text-green-300 text-base font-mono font-semibold shadow">
-                        <span className="mr-2 text-lg">⏰</span>
-                        <span>
-                          Session key valid until&nbsp;
-                          <span className="text-green-100 font-bold">
-                            {new Date(sessionKeyValidUntil * 1000).toLocaleString()}
-                          </span>
+          <div className="flex flex-col items-center my-4">
+            {/* Only show 'Create Session Key' button if there is no valid session key */}
+            {(!serialisedSessionKey || !sessionKeyValidUntil || Math.floor(Date.now() / 1000) >= sessionKeyValidUntil) && (actionStatus === 'idle' || actionStatus === 'creatingSessionKey') && (
+              <button
+                className={`px-4 py-2 rounded mb-4 ${actionStatus !== 'idle' || !sessionAccountAddress || !use7702 ? 'bg-gray-300 text-gray-500' : 'bg-blue-600 text-white'}`}
+                onClick={handleCreateSessionKey}
+                disabled={actionStatus !== 'idle' || !sessionAccountAddress || !use7702}
+              >
+                {actionStatus === 'creatingSessionKey' ? 'Creating Session Key ...' : 'Create Session Key'}
+              </button>
+            )}
+            {serialisedSessionKey && sessionKeyValidUntil && Math.floor(Date.now() / 1000) < sessionKeyValidUntil && (
+              <>
+                <div className="flex flex-col items-center mt-1">
+                  <div className="flex items-center justify-center">
+                    <span className="inline-flex items-center px-4 py-2 rounded-lg border border-green-400 bg-card text-green-300 text-base font-mono font-semibold shadow">
+                      <span className="mr-2 text-lg">⏰</span>
+                      <span>
+                        Session key valid until&nbsp;
+                        <span className="text-green-100 font-bold">
+                          {new Date(sessionKeyValidUntil * 1000).toLocaleString()}
                         </span>
-                        <button
-                          className="ml-4 px-3 py-1 border border-gray-400 text-gray-700 bg-gray-100 rounded hover:bg-gray-200 transition-colors text-sm font-medium"
-                          onClick={() => {
-                            setSerialisedSessionKey(null);
-                            setSessionKernelClient(null);
-                            setSessionAccountAddress(null);
-                            setSessionKeyAddress(undefined);
-                            setUse7702(false);
-                            setSetupStep(0);
-                            setSessionKeyValidUntil(null);
-                            setActionStatus('idle');
-                            setSessionKeyMessage(null);
-                            setTradeError(null);
-                          }}
-                        >
-                          Revoke
-                        </button>
                       </span>
-                    </div>
+                      <button
+                        className="ml-4 px-3 py-1 border border-gray-400 text-gray-700 bg-gray-100 rounded hover:bg-gray-200 transition-colors text-sm font-medium"
+                        onClick={() => {
+                          setSerialisedSessionKey(null);
+                          setSessionKernelClient(null);
+                          setSessionAccountAddress(null);
+                          setSessionKeyAddress(undefined);
+                          setUse7702(false);
+                          setSetupStep(0);
+                          setSessionKeyValidUntil(null);
+                          setActionStatus('idle');
+                          setSessionKeyMessage(null);
+                          setTradeError(null);
+                        }}
+                      >
+                        Revoke
+                      </button>
+                    </span>
                   </div>
-                  {needsApproval &&actionStatus !== 'approved' && (
-                    <button
-                      className={`px-4 py-2 rounded mt-4 ${(!serialisedSessionKey || !sessionKeyValidUntil || Math.floor(Date.now() / 1000) >= sessionKeyValidUntil || !sessionAccountAddress || !use7702) ? 'bg-gray-300 text-gray-500' : 'bg-blue-600 text-white'}`}
-                      onClick={handleApproveTokens}
-                      disabled={(!serialisedSessionKey || !sessionKeyValidUntil || Math.floor(Date.now() / 1000) >= sessionKeyValidUntil || !sessionAccountAddress || !use7702)}
-                    >
-                      {actionStatus === 'approving' ? 'Approving ...' : 'Approve USDC & SBC'}
-                    </button>
-                  )}
-                </>
-              )}
-            </div>
-          )}
+                </div>
+                {needsApproval && actionStatus !== 'approved' && (
+                  <button
+                    className={`px-4 py-2 rounded mt-4 ${(!serialisedSessionKey || !sessionKeyValidUntil || Math.floor(Date.now() / 1000) >= sessionKeyValidUntil || !sessionAccountAddress || !use7702) ? 'bg-gray-300 text-gray-500' : 'bg-blue-600 text-white'}`}
+                    onClick={handleApproveTokens}
+                    disabled={(!serialisedSessionKey || !sessionKeyValidUntil || Math.floor(Date.now() / 1000) >= sessionKeyValidUntil || !sessionAccountAddress || !use7702)}
+                  >
+                    {actionStatus === 'approving' ? 'Approving ...' : 'Approve USDC & SBC'}
+                  </button>
+                )}
+              </>
+            )}
+          </div>
+        )}
       </header>
     );
   }

@@ -149,7 +149,11 @@ export async function executeGaslessTrade(
       paymaster: sbcPaymasterClient,
       userOperation: {
         estimateFeesPerGas: async () => {
-          return (await pimlicoClient.getUserOperationGasPrice()).fast;
+          const gasPrice = await publicClient.getGasPrice();
+          return {
+            maxFeePerGas: gasPrice,
+            maxPriorityFeePerGas: gasPrice * 2n,
+          };
         },
       },
     });

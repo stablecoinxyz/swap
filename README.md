@@ -19,9 +19,6 @@ To run this project locally, you'll need to set up the following environment var
 ### Required API Keys
 
 ```bash
-# Get an API key from https://dashboard.pimlico.io/
-NEXT_PUBLIC_PIMLICO_API_KEY=""
-
 # Get a project ID from https://cloud.reown.com/ (WalletConnect)
 NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=""
 
