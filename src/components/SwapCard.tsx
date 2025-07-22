@@ -425,7 +425,7 @@ const SwapCard = memo(
 
       try {
         if (use7702) {
-          const { userOpHash, txState: status } = await execute7702GaslessTrade(
+          const { txState: status, txHash } = await execute7702GaslessTrade(
             trade,
             config,
             sessionKeyAddress!,
@@ -433,21 +433,21 @@ const SwapCard = memo(
           );
 
           console.debug(
-            `Executed 7702 gasless trade: ${status}; Receipt: ${getScannerUrl(base.id, userOpHash)}`,
+            `Executed 7702 gasless trade: ${status}; Receipt: ${getScannerUrl(base.id, txHash)}`,
           );
 
-          response = { transactionHash: userOpHash as Hex };
+          response = { transactionHash: txHash as Hex };
         } else {
-          const { userOpHash, txState: status } = await executeGaslessTrade(
+          const { txHash, txState: status } = await executeGaslessTrade(
             trade,
             config,
           );
 
           console.debug(
-            `Executed gasless trade: ${status}; Receipt: ${getScannerUrl(base.id, userOpHash)}`,
+            `Executed gasless trade: ${status}; Receipt: ${getScannerUrl(base.id, txHash)}`,
           );
 
-          response = { transactionHash: userOpHash as Hex };
+          response = { transactionHash: txHash as Hex };
         }
 
         return response;

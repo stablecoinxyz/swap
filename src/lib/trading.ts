@@ -112,6 +112,7 @@ export async function executeGaslessTrade(
 ): Promise<{
   txState: TransactionState;
   userOpHash: string;
+  txHash: Hex;
 }> {
   try {
     if (!config.account!.address) {
@@ -274,38 +275,41 @@ export async function executeGaslessTrade(
       });
     }
 
-    // send the batch call transaction to the SimpleAccount
-    const userOpHash = await smartAccountClient.sendUserOperation({
-      calls,
-    });
-
-    const receipt = await smartAccountClient.waitForUserOperationReceipt({
-      hash: userOpHash,
-      pollingInterval: 1000,
-      timeout: 7000,
-      retryCount: 7,
-    })
-      .catch((e) => {
-        // if timeout but the userOpHash is still valid, return the userOpHash anyway
-        if (e instanceof WaitForUserOperationReceiptTimeoutError && userOpHash.startsWith("0x")) {
-          return {
-            txState: TransactionState.Sent,
-            userOpHash: userOpHash,
-          };
-        } else {
-          console.error(e);
-          return {
-            txState: TransactionState.Failed,
-            userOpHash: userOpHash,
-          };
-        }
-
+    try {
+      // send the batch call transaction to the SimpleAccount
+      const userOpHash = await smartAccountClient.sendUserOperation({
+        calls,
       });
 
-    return {
-      txState: TransactionState.Sent,
-      userOpHash: receipt.userOpHash,
-    };
+      const receipt = await smartAccountClient.waitForUserOperationReceipt({
+        hash: userOpHash,
+        pollingInterval: 1000,
+        timeout: 7000,
+        retryCount: 7,
+      })
+
+      return {
+        txState: TransactionState.Sent,
+        userOpHash: receipt.userOpHash,
+        txHash: receipt.receipt.transactionHash,
+      };
+    } catch (e) {
+      // if timeout but the userOpHash is still valid, return the userOpHash anyway
+      if (e instanceof WaitForUserOperationReceiptTimeoutError) {
+        return {
+          txState: TransactionState.Sent,
+          userOpHash: (e as Error).message as string,
+          txHash: "0x" as Hex,
+        };
+      } else {
+        console.error(e);
+        return {
+          txState: TransactionState.Failed,
+          userOpHash: (e as Error).message as string,
+          txHash: "0x" as Hex,
+        };
+      }
+    }
   } catch (e) {
     console.error(e);
     throw e;
@@ -320,6 +324,7 @@ export async function execute7702GaslessTrade(
 ): Promise<{
   txState: TransactionState;
   userOpHash: string;
+  txHash: Hex;
 }> {
   console.debug("Executing 7702 gasless trade");
 
@@ -417,6 +422,7 @@ export async function execute7702GaslessTrade(
       return {
         txState: TransactionState.Sent,
         userOpHash: receipt.userOpHash,
+        txHash: receipt.receipt.transactionHash,
       };
     } catch (e) {
       const msg = (e as Error)?.message || "";
