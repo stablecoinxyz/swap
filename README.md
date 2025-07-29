@@ -31,7 +31,7 @@ NEXT_PUBLIC_ALCHEMY_BASE_ENDPOINT=""
 ```bash
 # 1. Get an API Key for the SBC paymaster from the SBC Dashboard - https://dashboard.stablecoin.xyz/
 # 2. Replace YOUR_SBC_API_KEY with your API Key from the SBC Dashboard
-NEXT_PUBLIC_AA_BASE_URL="https://aa-proxy.up.railway.app/rpc/v1/base/YOUR_SBC_API_KEY"
+NEXT_PUBLIC_AA_BASE_URL="https://api.aa.stablecoin.xyz/rpc/v1/base/YOUR_SBC_API_KEY"
 ```
 
 ### EIP-7702 Setup (Optional)
