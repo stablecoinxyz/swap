@@ -18,10 +18,10 @@ import { ConnectWallet } from "@/components/ConnectWallet";
 import { SwapCard } from "@/components/SwapCard";
 import { CurrentConfig } from "@/config";
 import { SBC, USDC } from "@/lib/constants";
-import { pimlicoClient, publicClient, sbcPaymasterClient } from "@/lib/providers";
+import { publicClient, sbcPaymasterClient, sbcPaymasterUrl } from "@/lib/providers";
 
-const ZERODEV_APP_ID = process.env.NEXT_PUBLIC_ZERODEV_APP_ID;
-const ZERODEV_BASE_URL = `https://rpc.zerodev.app/api/v3/${ZERODEV_APP_ID}/chain/8453`;
+// const ZERODEV_APP_ID = process.env.NEXT_PUBLIC_ZERODEV_APP_ID;
+// const ZERODEV_BASE_URL = `https://rpc.zerodev.app/api/v3/${ZERODEV_APP_ID}/chain/8453`;
 
 const kernelAddresses = KernelVersionToAddressesMap[KERNEL_V3_3];
 
@@ -256,11 +256,17 @@ export default function Home() {
       const tempKernelClient = createKernelAccountClient({
         account: sessionKeyKernelAccount,
         chain: base,
-        bundlerTransport: http(ZERODEV_BASE_URL),
-        paymaster: createZeroDevPaymasterClient({
-          chain: base,
-          transport: http(ZERODEV_BASE_URL),
-        }),
+        bundlerTransport: http(sbcPaymasterUrl),
+        paymaster: sbcPaymasterClient,
+        userOperation: {
+          estimateFeesPerGas: async () => {
+            const gasPrice = await publicClient.getGasPrice();
+            return {
+              maxFeePerGas: gasPrice,
+              maxPriorityFeePerGas: gasPrice * 2n,
+            };
+          },
+        },
       });
       const tx = await tempKernelClient.sendUserOperation({ calls: approvalCalls });
       console.log("approval tx", tx);
@@ -271,24 +277,41 @@ export default function Home() {
 
     setSessionAccountAddress(sessionKeyKernelAccount.address);
 
-    // zerodev paymaster
-    const kernelPaymaster = createZeroDevPaymasterClient({
-      chain: base,
-      transport: http(ZERODEV_BASE_URL),
-    });
+    // // zerodev paymaster
+    // const kernelPaymaster = createZeroDevPaymasterClient({
+    //   chain: base,
+    //   transport: http(ZERODEV_BASE_URL),
+    // });
+
+    // const kernelClient = createKernelAccountClient({
+    //   account: sessionKeyKernelAccount,
+    //   chain: base,
+    //   bundlerTransport: http(ZERODEV_BASE_URL),
+    //   paymaster: {
+    //     getPaymasterData: (userOperation) => {
+    //       return kernelPaymaster.sponsorUserOperation({
+    //         userOperation,
+    //       })
+    //     }
+    //   }
+    // });
 
     const kernelClient = createKernelAccountClient({
       account: sessionKeyKernelAccount,
       chain: base,
-      bundlerTransport: http(ZERODEV_BASE_URL),
-      paymaster: {
-        getPaymasterData: (userOperation) => {
-          return kernelPaymaster.sponsorUserOperation({
-            userOperation,
-          })
-        }
-      }
+      bundlerTransport: http(sbcPaymasterUrl),
+      paymaster: sbcPaymasterClient,
+      userOperation: {
+        estimateFeesPerGas: async () => {
+          const gasPrice = await publicClient.getGasPrice();
+          return {
+            maxFeePerGas: gasPrice,
+            maxPriorityFeePerGas: gasPrice * 2n,
+          };
+        },
+      },
     });
+
 
     setSessionKernelClient(kernelClient);
   };
@@ -362,11 +385,8 @@ export default function Home() {
     const kernelClient = createKernelAccountClient({
       account: kernelAccount,
       chain: base,
-      bundlerTransport: http(ZERODEV_BASE_URL),
-      paymaster: createZeroDevPaymasterClient({
-        chain: base,
-        transport: http(ZERODEV_BASE_URL),
-      }),
+      bundlerTransport: http(sbcPaymasterUrl),
+      paymaster: sbcPaymasterClient,
       userOperation: {
         estimateFeesPerGas: async () => {
           const gasPrice = await publicClient.getGasPrice();
@@ -532,17 +552,26 @@ export default function Home() {
                     // Recreate kernel client
                     const kernelPaymaster = createZeroDevPaymasterClient({
                       chain: base,
-                      transport: http(ZERODEV_BASE_URL),
+                      transport: http(sbcPaymasterUrl),
                     });
                     const kernelClient = createKernelAccountClient({
                       account: sessionKeyKernelAccount,
                       chain: base,
-                      bundlerTransport: http(ZERODEV_BASE_URL),
+                      bundlerTransport: http(sbcPaymasterUrl),
                       paymaster: {
                         getPaymasterData: (userOperation) => {
                           return kernelPaymaster.sponsorUserOperation({
                             userOperation,
                           });
+                        },
+                      },
+                      userOperation: {
+                        estimateFeesPerGas: async () => {
+                          const gasPrice = await publicClient.getGasPrice();
+                          return {
+                            maxFeePerGas: gasPrice,
+                            maxPriorityFeePerGas: gasPrice * 2n,
+                          };
                         },
                       },
                     });

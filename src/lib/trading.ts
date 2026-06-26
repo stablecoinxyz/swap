@@ -58,9 +58,9 @@ import swapRouter2Abi from "@/lib/abi/swapRouter2.abi";
 import { fromReadableAmount } from "@/lib/extras";
 import { getPoolData } from "@/lib/pool";
 import {
-  pimlicoClient,
   publicClient,
   sbcPaymasterClient,
+  sbcPaymasterUrl,
   TransactionState,
 } from "@/lib/providers";
 
@@ -146,7 +146,7 @@ export async function executeGaslessTrade(
     const smartAccountClient = createSmartAccountClient({
       account: simpleAccount,
       chain: base,
-      bundlerTransport: http(process.env.NEXT_PUBLIC_AA_BASE_URL!),
+      bundlerTransport: http(sbcPaymasterUrl),
       paymaster: sbcPaymasterClient,
       userOperation: {
         estimateFeesPerGas: async () => {

@@ -37,3 +37,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# session handoff (local per-worktree scratch; never commit)
+HANDOFF.md
+.handoff-archive/
