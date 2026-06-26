@@ -54,7 +54,7 @@
     "eslint-plugin-simple-import-sort": "^12.1.1",
     "husky": "^8.0.0",
     "lint-staged": "^16.1.2",
-    "postcss": "^8",
+    "postcss": "8.5.15",
     "prettier": "^3.3.3",
     "tailwindcss": "^3.3.0",
     "typescript": "^5.0.4"
@@ -65,6 +65,7 @@
     ]
   },
   "overrides": {
-    "ox": "0.8.1"
+    "ox": "0.8.1",
+    "postcss": "8.5.15"
   }
 }
