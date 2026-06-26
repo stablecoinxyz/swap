@@ -26,16 +26,17 @@
     "@uniswap/v3-sdk": "^3.18.1",
     "@zerodev/permissions": "^5.5.10",
     "@zerodev/sdk": "^5.4.39",
+    "@zerodev/webauthn-key": "5.4.4",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",
-    "connectkit": "^1.8.2",
+    "connectkit": "1.9.2",
     "jsbi": "3.2.5",
     "lucide-react": "^0.447.0",
-    "next": "14.2.35",
+    "next": "15.5.19",
     "next-themes": "^0.3.0",
     "permissionless": "^0.2.44",
-    "react": "^18.3",
-    "react-dom": "^18.3",
+    "react": "19.2.7",
+    "react-dom": "19.2.7",
     "react-number-format": "^5.4.2",
     "tailwind-merge": "^2.5.2",
     "tailwindcss-animate": "^1.0.7",
@@ -45,15 +46,15 @@
   },
   "devDependencies": {
     "@types/node": "^20",
-    "@types/react": "^18",
-    "@types/react-dom": "^18",
+    "@types/react": "19.2.17",
+    "@types/react-dom": "19.2.3",
     "autoprefixer": "^10.0.1",
     "eslint": "^8",
-    "eslint-config-next": "14.1.0",
+    "eslint-config-next": "15.5.19",
     "eslint-plugin-simple-import-sort": "^12.1.1",
     "husky": "^8.0.0",
     "lint-staged": "^16.1.2",
-    "postcss": "^8",
+    "postcss": "8.5.15",
     "prettier": "^3.3.3",
     "tailwindcss": "^3.3.0",
     "typescript": "^5.0.4"
@@ -64,6 +65,7 @@
     ]
   },
   "overrides": {
-    "ox": "0.8.1"
+    "ox": "0.8.1",
+    "postcss": "8.5.15"
   }
 }
